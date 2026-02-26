@@ -1,0 +1,39 @@
+# Docker 관련
+docker-compose.override.yml
+
+# 로그 파일
+logs/
+*.log
+
+# 데이터 디렉토리 (로컬 개발용)
+data/
+nifi/
+# kafka/ 디렉토리 무시 (루트의 kafka 디렉토리만, hrfco-kafka-streams의 소스는 제외)
+/kafka/
+# hrfco-kafka-streams의 Java 소스는 추적
+!hrfco-kafka-streams/src/main/java/**/*.java
+rabbitmq/
+minio/
+timescaledb/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 환경 변수 파일
+.env
+.env.local
+
+# Gradle 빌드
+**/build/
+**/.gradle/
+**/bin/
+**/out/
+*.jar
+!gradle-wrapper.jar
+

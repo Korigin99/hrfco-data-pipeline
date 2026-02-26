@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
+
+    <!-- Kafka Streams 로깅 레벨 -->
+    <logger name="org.apache.kafka" level="INFO"/>
+    <logger name="org.apache.kafka.streams" level="INFO"/>
+    <logger name="hrfco.kafka.streams" level="DEBUG"/>
+</configuration>

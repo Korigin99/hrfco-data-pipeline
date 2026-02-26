@@ -1,0 +1,58 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '3.4.13-SNAPSHOT'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.magpie'
+version = '1.0.0'
+description = 'HRFCO Monitoring Server - 한강 홍수통제소 실시간 알림 서버'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(17)
+	}
+}
+
+// 한글 주석 처리를 위한 UTF-8 인코딩 설정
+tasks.withType(JavaCompile) {
+	options.encoding = 'UTF-8'
+}
+
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+repositories {
+	mavenCentral()
+	maven { url = 'https://repo.spring.io/snapshot' }
+}
+
+dependencies {
+	// Spring Boot
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation ('org.apache.httpcomponents:httpclient:4.5.14') {
+		exclude group: 'commons-logging', module: 'commons-logging'
+	}
+	implementation 'org.springframework.kafka:spring-kafka'
+	
+	// MongoDB Driver (Spring Boot가 관리하는 버전 사용)
+	implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
+	
+	// Lombok
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+	
+	// DevTools (개발 편의성)
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+	
+	// Testing
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
