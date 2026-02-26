@@ -1,0 +1,287 @@
+services:
+  # ============================================
+  # 1. TimescaleDB - 시계열 데이터베이스 (최우선 시작)
+  # ============================================
+  # 센서 데이터를 시계열로 저장 (PostgreSQL 기반)
+  # DBeaver 등으로 접근: localhost:5433 (postgres/postgrespassword123)
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    platform: linux/amd64  # Windows/Linux 호환성 보장
+    container_name: timescaledb
+    ports:
+      - "5433:5432"  # PostgreSQL 포트 (호스트:5433 → 컨테이너:5432, 로컬 PostgreSQL과 충돌 방지) 
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword123
+      POSTGRES_DB: pipeline_db
+    volumes:
+      - timescaledb-data:/var/lib/postgresql/data  # 데이터 영구 저장
+    networks:
+      - data-pipeline-network
+    stop_grace_period: 120s  # TimescaleDB graceful shutdown을 위한 충분한 시간 제공
+    shm_size: 256mb  # shared memory 크기 설정 (TimescaleDB background worker용)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  # ============================================
+  # 2. MongoDB - NoSQL 데이터베이스 (JSON 문서 저장)
+  # ============================================
+  # 원본 JSON 데이터 및 메타데이터 저장
+  # 접근: mongodb://localhost:27017 (admin/adminpassword123)
+  mongodb:
+    image: mongo:7.0
+    platform: linux/amd64  # Windows/Linux 호환성 보장
+    container_name: mongodb
+    ports:
+      - "27017:27017"  # MongoDB 포트
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: adminpassword123
+    volumes:
+      - mongodb-data:/data/db  # 데이터 영구 저장
+    networks:
+      - data-pipeline-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s  # 타임아웃 증가 (5s → 10s)
+      retries: 5   # 재시도 횟수 증가 (3 → 5)
+      start_period: 60s  # 시작 대기 시간 증가 (30s → 60s)
+
+  # ============================================
+  # 3. MinIO - 객체 스토리지 (Data Lake)
+  # ============================================
+  # 정상/이상 데이터를 JSON 파일로 저장
+  # 웹 콘솔: http://localhost:9001 (admin/adminpassword123)
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    platform: linux/amd64  # Windows/Linux 호환성 보장
+    container_name: minio
+    ports:
+      - "9000:9000"  # MinIO API 포트
+      - "9001:9001"  # MinIO 웹 콘솔 포트
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: adminpassword123
+    volumes:
+      - minio-data:/data  # 데이터 영구 저장
+    networks:
+      - data-pipeline-network
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ============================================
+  # 4. Kafka - 메시지 브로커 (이벤트 스트림 버퍼)
+  # ============================================
+  # NiFi에서 받은 데이터를 버퍼링하고 Kafka Streams가 소비
+  # KRaft 모드 사용 (Zookeeper 없이 실행)
+  kafka:
+    image: apache/kafka:4.1.0
+    platform: linux/amd64  # Windows/Linux 호환성 보장
+    container_name: kafka
+    ports:
+      - "9092:9092"  # Kafka 브로커 포트
+      - "9093:9093"  # Controller 포트 (KRaft 모드)
+    environment:
+      # KRaft 모드 설정
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092  # Docker 내부 네트워크 주소
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      # 단일 노드 설정 (개발 환경)
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      # 개발 환경 최적화: 파티션 수 감소 (시작 시간 단축)
+      KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS: 1
+      KAFKA_TRANSACTION_STATE_LOG_NUM_PARTITIONS: 1
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - data-pipeline-network
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  # ============================================
+  # 5. NiFi - 데이터 수집 및 라우팅
+  # ============================================
+  # HTTP 요청 수신 → Kafka로 전송하는 워크플로우 관리
+  # 웹 UI: https://localhost:8443/nifi (admin/AdminPassword123456)
+  # API 엔드포인트: http://localhost:7001
+  nifi:
+    image: apache/nifi:2.6.0
+    platform: linux/amd64  # Windows/Linux 호환성 보장
+    container_name: nifi
+    ports:
+      - "8443:8443"  # NiFi 웹 UI (HTTPS)
+      - "7001:7001"  # ListenHTTP API 포트
+    environment:
+      SINGLE_USER_CREDENTIALS_USERNAME: admin
+      SINGLE_USER_CREDENTIALS_PASSWORD: AdminPassword123456
+      JVM_HEAP_INIT: 512m  # 초기 메모리
+      JVM_HEAP_MAX: 2g     # 최대 메모리
+      # SSL/TLS 설정 - 공공 API HTTPS 호출을 위해 Java 기본 truststore 사용
+      TRUSTSTORE_PATH: /opt/java/openjdk/lib/security/cacerts
+      TRUSTSTORE_PASSWORD: changeit
+    volumes:
+      - nifi-conf:/opt/nifi/nifi-current/conf
+      - nifi-state:/opt/nifi/nifi-current/state
+      - nifi-database_repository:/opt/nifi/nifi-current/database_repository
+      - nifi-flowfile_repository:/opt/nifi/nifi-current/flowfile_repository
+      - nifi-content_repository:/opt/nifi/nifi-current/content_repository
+      - nifi-provenance_repository:/opt/nifi/nifi-current/provenance_repository
+    networks:
+      - data-pipeline-network
+    depends_on:
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -k -f https://localhost:8443/nifi/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+
+  # ============================================
+  # 6. HRFCO Kafka Streams - 한강 홍수통제소 데이터 처리
+  # ============================================
+  # 한강 홍수통제소 수위 데이터 처리 (검증, 홍수 경보 분석, 저장)
+  hrfco-kafka-streams:
+    build:
+      context: ./hrfco-kafka-streams
+      dockerfile: Dockerfile
+    platform: linux/amd64
+    container_name: hrfco-kafka-streams
+    networks:
+      - data-pipeline-network
+    depends_on:
+      kafka:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: admin
+      MINIO_SECRET_KEY: adminpassword123
+      MINIO_BUCKET: iot-data
+      TIMESCALEDB_HOST: timescaledb
+      TIMESCALEDB_PORT: 5432
+      TIMESCALEDB_DB: pipeline_db
+      TIMESCALEDB_USER: postgres
+      TIMESCALEDB_PASSWORD: postgrespassword123
+      MONGODB_HOST: mongodb
+      MONGODB_PORT: 27017
+      MONGODB_DB: pipeline_db
+      MONGODB_USER: admin
+      MONGODB_PASSWORD: adminpassword123
+      HRFCO_SERVICE_KEY: 7F1EF036-EB93-4721-96CB-EEDC63624041
+      NUM_STREAM_THREADS: 4  # 병렬 처리 스레드 수 (환경 변수 미설정 시 CPU 코어 수 자동 사용)
+
+
+
+  # ============================================
+  # 7. HRFCO Monitoring Server - SSE 알림 및 모니터링 서버
+  # ============================================
+  # 수위 경보 알림을 실시간으로 클라이언트에게 전송
+  # 웹 UI: http://localhost:8081/test.html
+  hrfco-monitoring-server:
+    build:
+      context: ./hrfco-monitoring-server
+      dockerfile: Dockerfile
+    platform: linux/amd64
+    container_name: hrfco-monitoring-server
+    ports:
+      - "8081:8080"  # 알림 서버 포트 및 웹 UI
+      
+    networks:
+      - data-pipeline-network
+    depends_on: 
+      kafka:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      ALERT_TOPIC: hrfco-alerts
+      MONGODB_HOST: mongodb
+      MONGODB_PORT: 27017
+      MONGODB_DB: pipeline_db
+      MONGODB_USER: admin
+      MONGODB_PASSWORD: adminpassword123
+
+  # ============================================
+  # 8. Kafka UI - Kafka 모니터링 대시보드 (주석 처리 - 당분간 사용 안 함)
+  # ============================================
+  # Kafka 토픽, 컨슈머 그룹, 메시지 등을 시각적으로 모니터링
+  # 웹 UI: http://localhost:8080
+  # kafka-ui:
+  #   image: provectuslabs/kafka-ui:v0.7.1
+  #   platform: linux/amd64  # Windows/Linux 호환성 보장
+  #   container_name: kafka-ui
+  #   ports:
+  #     - "8080:8080"  # Kafka UI 웹 포트
+  #   environment:
+  #     KAFKA_CLUSTERS_0_NAME: local
+  #     KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+  #     KAFKA_CLUSTERS_0_ZOOKEEPER: ""  # KRaft 모드이므로 비워둠
+  #   networks:
+  #     - data-pipeline-network
+  #   depends_on:
+  #     kafka:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+
+
+# ============================================
+# 네트워크 설정
+# ============================================
+networks:
+  data-pipeline-network:
+    driver: bridge  # 모든 서비스가 같은 네트워크에서 통신
+
+# ============================================
+# 볼륨 설정 (데이터 영구 저장)
+# ============================================
+volumes:
+  # NiFi 관련 볼륨
+  nifi-conf:
+  nifi-state:
+  nifi-database_repository:
+  nifi-flowfile_repository:
+  nifi-content_repository:
+  nifi-provenance_repository:
+  # Kafka 데이터 볼륨
+  kafka-data:
+  # MongoDB 데이터 볼륨
+  mongodb-data:
+  # MinIO 데이터 볼륨
+  minio-data:
+  # TimescaleDB 데이터 볼륨
+  timescaledb-data:

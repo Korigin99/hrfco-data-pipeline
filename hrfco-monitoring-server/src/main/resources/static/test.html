@@ -1,0 +1,1869 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HRFCO Real-time Monitoring System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            /* Light Mode - Clean & Modern */
+            --bg-primary: #f8f9fa;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f1f3f5;
+            --border-color: #e0e3e7;
+            --text-primary: #1a1d1f;
+            --text-secondary: #4a5568;
+            --text-muted: #9aa5b1;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-yellow: #f59e0b;
+            --accent-orange: #f97316;
+            --accent-red: #ef4444;
+            --accent-purple: #a855f7;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1920px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 32px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .header-left h1 {
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            margin-bottom: 4px;
+        }
+
+        .header-subtitle {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .header-right {
+            display: flex;
+            gap: 24px;
+            align-items: center;
+        }
+
+        .status-chip {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 13px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .status-dot.disconnected {
+            background: var(--accent-red);
+            box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .time-display {
+            font-family: 'Courier New', monospace;
+            color: var(--text-secondary);
+        }
+
+        /* Main Layout */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 24px;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* Card */
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+            transition: box-shadow 0.3s;
+        }
+        
+        .card:hover {
+            box-shadow: var(--shadow-md);
+        }
+
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        /* System Status */
+        .system-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 16px;
+            margin-bottom: 8px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .system-item:hover {
+            background: #e9ecef;
+            border-color: #ced4da;
+        }
+
+        .system-label {
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .system-icon {
+            width: 20px;
+            text-align: center;
+            opacity: 0.7;
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-online { background: #d1fae5; color: #065f46; font-weight: 700; }
+        .badge-offline { background: #fee2e2; color: #991b1b; font-weight: 700; }
+        .badge-unknown { background: #fef3c7; color: #92400e; font-weight: 700; }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .stat-card {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            padding: 18px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: var(--shadow-sm);
+            transition: all 0.2s;
+        }
+        
+        .stat-card:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+            margin-bottom: 6px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Station List */
+        .station-list {
+            max-height: 400px;
+            overflow-y: auto;
+            min-height: 400px;
+        }
+
+        .station-item {
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .station-item:hover {
+            background: var(--bg-tertiary);
+            padding-left: 16px;
+        }
+
+        .station-item:last-child {
+            border-bottom: none;
+        }
+
+        .station-code {
+            font-family: 'Courier New', monospace;
+            color: var(--text-secondary);
+            font-size: 11px;
+            margin-top: 2px;
+        }
+
+        /* Filter Tabs */
+        .filter-container {
+            display: flex;
+            gap: 8px;
+            padding: 0 20px 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .filter-tab {
+            flex: 1;
+            padding: 12px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 13px;
+            font-weight: 600;
+            text-align: center;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .filter-tab:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--accent-blue);
+            color: var(--text-primary);
+        }
+
+        .filter-tab.active {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: white;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+        }
+
+        .filter-count {
+            font-family: 'Courier New', monospace;
+            margin-left: 6px;
+            opacity: 0.7;
+        }
+
+        /* Alerts */
+        .alerts-container {
+            padding: 16px 20px;
+            max-height: calc(100vh - 280px);
+            overflow-y: auto;
+        }
+
+        .alerts-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .alerts-container::-webkit-scrollbar-track {
+            background: var(--bg-tertiary);
+        }
+
+        .alerts-container::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+
+        .alerts-container::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        .alert-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid;
+            border-radius: 10px;
+            padding: 18px;
+            margin-bottom: 12px;
+            transition: all 0.25s;
+            cursor: pointer;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .alert-card:hover {
+            background: var(--bg-tertiary);
+            transform: translateX(4px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .alert-card.level-normal { 
+            border-left-color: var(--accent-green); 
+            background: linear-gradient(90deg, rgba(16, 185, 129, 0.03), transparent);
+        }
+        .alert-card.level-attention { 
+            border-left-color: var(--accent-blue); 
+            background: linear-gradient(90deg, rgba(59, 130, 246, 0.05), transparent);
+        }
+        .alert-card.level-caution { 
+            border-left-color: var(--accent-yellow); 
+            background: linear-gradient(90deg, rgba(245, 158, 11, 0.05), transparent);
+        }
+        .alert-card.level-warning { 
+            border-left-color: var(--accent-orange); 
+            background: linear-gradient(90deg, rgba(249, 115, 22, 0.05), transparent);
+        }
+        .alert-card.level-critical { 
+            border-left-color: var(--accent-red); 
+            background: linear-gradient(90deg, rgba(239, 68, 68, 0.05), transparent);
+        }
+        .alert-card.level-anomaly { 
+            border-left-color: #a855f7; 
+            background: linear-gradient(90deg, rgba(168, 85, 247, 0.05), transparent);
+        }
+
+        .alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .alert-station {
+            font-size: 15px;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+        }
+
+        .badge-level-normal { 
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            background: #d1fae5; 
+            color: #065f46; 
+        }
+        .badge-level-attention { 
+            padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+            background: #dbeafe; color: #1e40af; 
+        }
+        .badge-level-caution { 
+            padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+            background: #fef3c7; color: #92400e; 
+        }
+        .badge-level-warning { 
+            padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+            background: #fed7aa; color: #9a3412; 
+        }
+        .badge-level-critical { 
+            padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+            background: #fee2e2; color: #991b1b; 
+        }
+        .badge-level-anomaly { 
+            padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+            background: #f3e8ff; color: #6b21a8; 
+        }
+
+        .alert-time {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-family: 'Courier New', monospace;
+            margin-bottom: 12px;
+        }
+
+        .alert-metrics {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .metric {
+            background: var(--bg-tertiary);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .metric-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .metric-value {
+            font-size: 16px;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Station Detail */
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+
+        .detail-item {
+            background: var(--bg-tertiary);
+            padding: 16px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+            transition: all 0.2s;
+        }
+        
+        .detail-item:hover {
+            box-shadow: var(--shadow-md);
+        }
+
+        .detail-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        .detail-value {
+            font-size: 18px;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+        }
+
+        .threshold-bar {
+            height: 8px;
+            background: var(--bg-primary);
+            border-radius: 4px;
+            margin-top: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .threshold-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-green), var(--accent-blue), var(--accent-yellow), var(--accent-orange), var(--accent-red));
+            transition: width 0.3s;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-icon {
+            font-size: 40px;
+            margin-bottom: 12px;
+            opacity: 0.3;
+        }
+
+        .empty-text {
+            font-size: 14px;
+        }
+
+        /* NiFi Specific Styles */
+        .nifi-activity-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .nifi-activity-indicator.active {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--accent-green);
+        }
+        
+        .nifi-activity-indicator.idle {
+            background: rgba(156, 163, 175, 0.15);
+            color: var(--text-muted);
+        }
+        
+        .nifi-activity-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+        
+        .nifi-activity-dot.active {
+            background: var(--accent-green);
+            animation: pulse 1s ease-in-out infinite;
+        }
+        
+        .nifi-activity-dot.idle {
+            background: var(--text-muted);
+        }
+
+        .processor-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            margin-bottom: 8px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 13px;
+        }
+        
+        .processor-item.active {
+            border-left: 3px solid var(--accent-green);
+        }
+        
+        .processor-name {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .processor-stats {
+            display: flex;
+            gap: 16px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        
+        .processor-stat {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .main-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 대량 렌더링 시 애니메이션 비활성화로 성능 향상 */
+        /* 소량 데이터일 때만 애니메이션 적용 */
+        .alerts-container:not(.rendering) .alert-card {
+            animation: fadeIn 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <h1>HRFCO Monitoring System</h1>
+                <div class="header-subtitle">한강홍수통제소 실시간 수위 모니터링</div>
+            </div>
+            <div class="header-right">
+                <div class="status-chip">
+                    <div class="status-dot" id="connectionDot"></div>
+                    <span id="connectionStatus">Connecting...</span>
+                </div>
+                <div class="status-chip">
+                    <span class="time-display" id="currentTime">--:--:--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Layout -->
+        <div class="main-layout">
+            <!-- Left Sidebar -->
+            <div class="sidebar">
+                <!-- System Status Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">System Status</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="system-item">
+                            <span class="system-label">
+                                <span class="system-icon">●</span>
+                                Alert Server
+                            </span>
+                            <span class="badge badge-online">ONLINE</span>
+                        </div>
+                        <div class="system-item" id="kafkaStatus">
+                            <span class="system-label">
+                                <span class="system-icon">●</span>
+                                Kafka Broker
+                            </span>
+                            <span class="badge badge-unknown">CHECKING</span>
+                        </div>
+                        <div class="system-item" id="streamsStatus">
+                            <span class="system-label">
+                                <span class="system-icon">●</span>
+                                Stream Processor
+                            </span>
+                            <span class="badge badge-unknown">CHECKING</span>
+                        </div>
+                        <div class="system-item" id="nifiStatus">
+                            <span class="system-label">
+                                <span class="system-icon">●</span>
+                                Data Collector
+                            </span>
+                            <span class="badge badge-unknown">CHECKING</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistics Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Statistics</div>
+                        <span style="font-size: 12px; color: var(--text-muted);">Last hour</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-value" id="totalAlerts">0</div>
+                                <div class="stat-label">Total</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" style="color: var(--accent-green);" id="normalCount">0</div>
+                                <div class="stat-label">Normal</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" style="color: var(--accent-blue);" id="attentionCount">0</div>
+                                <div class="stat-label">Attention</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" style="color: var(--accent-yellow);" id="cautionCount">0</div>
+                                <div class="stat-label">Caution</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" style="color: var(--accent-orange);" id="warningCount">0</div>
+                                <div class="stat-label">Warning</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" style="color: var(--accent-red);" id="criticalCount">0</div>
+                                <div class="stat-label">Critical</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" style="color: #ec4899;" id="anomalyCount">0</div>
+                                <div class="stat-label">Anomaly</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NiFi Performance Metrics (개선) -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Data Collector (NiFi)</div>
+                        <div id="nifiActivityIndicator" class="nifi-activity-indicator idle">
+                            <span class="nifi-activity-dot idle"></span>
+                            <span>IDLE</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- 마지막 처리 시간 표시 -->
+                        <div style="margin-bottom: 16px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; border: 1px solid var(--border-color);">
+                            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Last Processing</div>
+                            <div id="nifiLastProcessing" style="font-size: 14px; font-weight: 600; font-family: 'Courier New', monospace;">--</div>
+                            <div id="nifiTimeSince" style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">--</div>
+                        </div>
+                        
+                        <div class="stats-grid" style="grid-template-columns: 1fr 1fr;">
+                            <div class="stat-card" title="현재 실행 중인 프로세서 수">
+                                <div class="stat-value" style="font-size: 24px; color: var(--accent-green);" id="nifiRunningProcessors">--</div>
+                                <div class="stat-label">Running</div>
+                            </div>
+                            <div class="stat-card" title="실제 데이터를 처리하는 프로세서 수">
+                                <div class="stat-value" style="font-size: 24px; color: var(--accent-blue);" id="nifiActiveProcessors">--</div>
+                                <div class="stat-label">Active</div>
+                            </div>
+                            <div class="stat-card" title="총 처리된 FlowFile 수 (누적)">
+                                <div class="stat-value" style="font-size: 24px; color: var(--accent-purple);" id="nifiTotalProcessed">--</div>
+                                <div class="stat-label">Processed</div>
+                            </div>
+                            <div class="stat-card" title="에러 및 경고 수">
+                                <div class="stat-value" style="font-size: 24px; color: var(--accent-red);" id="nifiErrors">--</div>
+                                <div class="stat-label">Errors</div>
+                            </div>
+                        </div>
+                        
+                        <!-- 상세 버튼 -->
+                        <button onclick="toggleNiFiMetrics()" style="width: 100%; margin-top: 16px; background: var(--accent-blue); color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <span>📊</span> View Detailed Metrics
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel - Data Feed -->
+            <div>
+                <!-- Data Feed Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Real-time Water Level Data</div>
+                        <span style="font-size: 12px; color: var(--text-muted);">Live feed via SSE</span>
+                    </div>
+                    
+                    <!-- Filter Tabs -->
+                    <div class="filter-container">
+                        <div class="filter-tab active" data-filter="all">
+                            ALL <span class="filter-count" id="allCount">0</span>
+                        </div>
+                        <div class="filter-tab" data-filter="normal">
+                            NORMAL <span class="filter-count" id="normalTabCount">0</span>
+                        </div>
+                        <div class="filter-tab" data-filter="alert">
+                            ALERTS <span class="filter-count" id="alertTabCount">0</span>
+                        </div>
+                        <div class="filter-tab" data-filter="anomaly">
+                            ANOMALY <span class="filter-count" id="anomalyTabCount">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Alerts Container -->
+                    <div class="alerts-container" id="alertsContainer">
+                        <div class="empty-state">
+                            <div class="empty-icon">●</div>
+                            <div class="empty-text">Waiting for data...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stations & Station Detail (2-column layout) -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; align-items: start;">
+                    <!-- Stations Card -->
+                    <div class="card" style="display: flex; flex-direction: column; height: fit-content;">
+                        <div class="card-header">
+                            <div class="card-title">📍 Observation Stations</div>
+                            <span id="stationCount" style="font-size: 12px; color: var(--text-muted);">0</span>
+                        </div>
+                        <div class="station-list" id="stationList" style="flex: 1;">
+                            <div class="empty-state">
+                                <div class="empty-icon">●</div>
+                                <div class="empty-text">Loading stations...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Station Detail Card -->
+                    <div class="card" id="stationDetailCard" style="display: flex; flex-direction: column; height: fit-content;">
+                        <div class="card-header">
+                            <div class="card-title">📊 Station Information</div>
+                        </div>
+                        <div class="card-body" id="stationDetailContent" style="max-height: 400px; min-height: 400px; overflow-y: auto; flex: 1;">
+                            <div class="empty-state">
+                                <div class="empty-icon">👈</div>
+                                <div class="empty-text">Select a station</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NiFi Metrics Detail (개선) -->
+                <div class="card" id="nifiMetricsCard" style="display: none; margin-top: 16px;">
+                    <div class="card-header">
+                        <div class="card-title">NiFi Detailed Metrics</div>
+                        <button onclick="closeNiFiMetrics()" style="background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">CLOSE</button>
+                    </div>
+                    <div class="card-body" id="nifiMetricsContent" style="max-height: 600px; overflow-y: auto;">
+                        <div class="empty-state">
+                            <div class="empty-text">Loading NiFi metrics...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Global State
+        let eventSource = null;
+        let alerts = [];
+        let currentFilter = 'all';
+        let nifiMetricsDetailInterval = null;
+        const stats = {
+            total: 0,
+            normal: 0,
+            attention: 0,
+            caution: 0,
+            warning: 0,
+            critical: 0,
+            anomaly: 0
+        };
+
+        // 한국 시간 형식으로 포맷 (날짜+시간)
+        function formatKSTDateTime(date) {
+            if (!date) return 'N/A';
+            try {
+                const dateObj = typeof date === 'string' ? new Date(date) : date;
+                if (isNaN(dateObj.getTime())) return date;
+                return dateObj.toLocaleString('ko-KR', {
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    timeZone: 'Asia/Seoul'
+                });
+            } catch (e) {
+                return date;
+            }
+        }
+        
+        // 안전한 시간 포맷팅 (에러 처리 포함)
+        function safeFormatKSTDateTime(dateStr) {
+            if (!dateStr || dateStr === 'N/A') return 'N/A';
+            try {
+                return formatKSTDateTime(new Date(dateStr));
+            } catch (e) {
+                return dateStr;
+            }
+        }
+        
+        // Update Clock
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('ko-KR', { 
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                timeZone: 'Asia/Seoul'
+            });
+            document.getElementById('currentTime').textContent = timeStr;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // SSE Connection
+        function connectSSE() {
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            eventSource = new EventSource('/api/alerts/stream');
+
+            eventSource.onopen = function() {
+                document.getElementById('connectionStatus').textContent = 'Connected';
+                document.getElementById('connectionDot').className = 'status-dot';
+            };
+
+            eventSource.addEventListener('connected', function(e) {
+                // SSE 연결 완료
+            });
+
+            eventSource.addEventListener('alert', function(e) {
+                try {
+                    const alert = JSON.parse(e.data);
+                    addAlert(alert);
+                } catch (err) {
+                    console.error('[ERROR] Parse alert:', err);
+                }
+            });
+
+            eventSource.onerror = function() {
+                document.getElementById('connectionStatus').textContent = 'Disconnected';
+                document.getElementById('connectionDot').className = 'status-dot disconnected';
+                setTimeout(connectSSE, 5000);
+            };
+        }
+
+        let alertBatch = [];
+        let renderScheduled = false;
+        let isRendering = false;
+        
+        // Add Alert
+        function addAlert(alert) {
+            alertBatch.push(alert);
+            updateStats(alert);
+            
+            if (!renderScheduled && !isRendering) {
+                renderScheduled = true;
+                const delay = alertBatch.length > 100 ? 200 : 100;
+                setTimeout(() => {
+                    alerts.unshift(...alertBatch);
+                    const batchSize = alertBatch.length;
+                    alertBatch = [];
+                    
+                    if (alerts.length > 500) {
+                        alerts = alerts.slice(0, 500);
+                    }
+                    
+                    batchSize > 50 ? renderAlertsProgressive() : renderAlerts();
+                    renderScheduled = false;
+                }, delay);
+            }
+        }
+
+        // Update Statistics
+        function updateStats(alert) {
+            stats.total++;
+
+            // isAnomaly가 true면 항상 anomaly로 분류 (warningLevel 무시)
+            if (alert.isAnomaly || alert.warningLevel === 'ANOMALY') {
+                stats.anomaly++;
+            } else {
+                const level = alert.warningLevel || 'NORMAL';
+                switch(level) {
+                    case 'NORMAL': stats.normal++; break;
+                    case 'ATTENTION': stats.attention++; break;
+                    case 'CAUTION': stats.caution++; break;
+                    case 'WARNING': stats.warning++; break;
+                    case 'CRITICAL': stats.critical++; break;
+                    default: stats.normal++; break;
+                }
+            }
+
+            document.getElementById('totalAlerts').textContent = stats.total;
+            document.getElementById('normalCount').textContent = stats.normal;
+            document.getElementById('attentionCount').textContent = stats.attention;
+            document.getElementById('cautionCount').textContent = stats.caution;
+            document.getElementById('warningCount').textContent = stats.warning;
+            document.getElementById('criticalCount').textContent = stats.critical;
+            document.getElementById('anomalyCount').textContent = stats.anomaly;
+
+            document.getElementById('allCount').textContent = stats.total;
+            document.getElementById('normalTabCount').textContent = stats.normal;
+            document.getElementById('alertTabCount').textContent = 
+                stats.attention + stats.caution + stats.warning + stats.critical;
+            document.getElementById('anomalyTabCount').textContent = stats.anomaly;
+        }
+
+        // Filter Alerts
+        function filterAlerts() {
+            switch(currentFilter) {
+                case 'all': return alerts;
+                case 'normal': 
+                    return alerts.filter(a => !a.isAnomaly && a.warningLevel !== 'ANOMALY' && 
+                        (a.warningLevel === 'NORMAL' || !a.warningLevel));
+                case 'alert':
+                    return alerts.filter(a => !a.isAnomaly && a.warningLevel !== 'ANOMALY' &&
+                        ['ATTENTION', 'CAUTION', 'WARNING', 'CRITICAL'].includes(a.warningLevel));
+                case 'anomaly':
+                    return alerts.filter(a => a.isAnomaly || a.warningLevel === 'ANOMALY');
+                default: return alerts;
+            }
+        }
+
+        let renderAnimationFrame = null;
+        
+        function renderAlerts() {
+            if (renderAnimationFrame) cancelAnimationFrame(renderAnimationFrame);
+            
+            const container = document.getElementById('alertsContainer');
+            const filtered = filterAlerts();
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">●</div>
+                        <div class="empty-text">No data for current filter</div>
+                    </div>
+                `;
+                return;
+            }
+
+            const MAX_DISPLAY = 200;
+            const alertsToRender = filtered.slice(0, MAX_DISPLAY);
+            if (alertsToRender.length > 50) {
+                container.innerHTML = '';
+                container.classList.add('rendering');
+                
+                const BATCH_SIZE = 20;
+                let currentIndex = 0;
+                
+                const renderBatch = () => {
+                    const batch = alertsToRender.slice(currentIndex, currentIndex + BATCH_SIZE);
+                    if (batch.length === 0) {
+                        // 더 많은 알림이 있으면 표시
+                        if (filtered.length > MAX_DISPLAY) {
+                            const moreInfo = document.createElement('div');
+                            moreInfo.className = 'empty-state';
+                            moreInfo.style.padding = '20px';
+                            moreInfo.innerHTML = `
+                                <div style="color: var(--text-muted); font-size: 12px;">
+                                    최근 ${MAX_DISPLAY}개만 표시됩니다. (총 ${filtered.length}개)
+                                </div>
+                            `;
+                            container.appendChild(moreInfo);
+                        }
+                        renderAnimationFrame = null;
+                        isRendering = false;
+                        container.classList.remove('rendering');
+                        return;
+                    }
+                    
+                    // DocumentFragment 사용으로 DOM 조작 최소화
+                    const fragment = document.createDocumentFragment();
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = batch.map((alert, idx) => createAlertHTML(alert, currentIndex + idx)).join('');
+                    
+                    while (tempDiv.firstChild) {
+                        fragment.appendChild(tempDiv.firstChild);
+                    }
+                    
+                    container.appendChild(fragment);
+                    currentIndex += BATCH_SIZE;
+                    
+                    renderAnimationFrame = requestAnimationFrame(() => {
+                        alertsToRender.length > 100 ? setTimeout(renderBatch, 5) : renderBatch();
+                    });
+                };
+                
+                isRendering = true;
+                renderAnimationFrame = requestAnimationFrame(renderBatch);
+            } else {
+                container.innerHTML = alertsToRender.map((alert, idx) => createAlertHTML(alert, idx)).join('');
+            }
+        }
+        
+        function renderAlertsProgressive() {
+            if (renderAnimationFrame) cancelAnimationFrame(renderAnimationFrame);
+            
+            const container = document.getElementById('alertsContainer');
+            const filtered = filterAlerts();
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">●</div>
+                        <div class="empty-text">No data for current filter</div>
+                    </div>
+                `;
+                isRendering = false;
+                return;
+            }
+
+            const MAX_DISPLAY = 200;
+            const alertsToRender = filtered.slice(0, MAX_DISPLAY);
+            const INITIAL_DISPLAY = 30;
+            const initialAlerts = alertsToRender.slice(0, INITIAL_DISPLAY);
+            
+            container.classList.add('rendering');
+            container.innerHTML = initialAlerts.map((alert, idx) => createAlertHTML(alert, idx)).join('');
+            
+
+            if (alertsToRender.length > INITIAL_DISPLAY) {
+                const BATCH_SIZE = 15;
+                let currentIndex = INITIAL_DISPLAY;
+                
+                const renderBatch = () => {
+                    const batch = alertsToRender.slice(currentIndex, currentIndex + BATCH_SIZE);
+                    if (batch.length === 0) {
+                        // 더 많은 알림이 있으면 표시
+                        if (filtered.length > MAX_DISPLAY) {
+                            const moreInfo = document.createElement('div');
+                            moreInfo.className = 'empty-state';
+                            moreInfo.style.padding = '20px';
+                            moreInfo.innerHTML = `
+                                <div style="color: var(--text-muted); font-size: 12px;">
+                                    최근 ${MAX_DISPLAY}개만 표시됩니다. (총 ${filtered.length}개)
+                                </div>
+                            `;
+                            container.appendChild(moreInfo);
+                        }
+                        renderAnimationFrame = null;
+                        isRendering = false;
+                        container.classList.remove('rendering');
+                        return;
+                    }
+                    
+                    // DocumentFragment 사용으로 DOM 조작 최소화
+                    const fragment = document.createDocumentFragment();
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = batch.map((alert, idx) => createAlertHTML(alert, currentIndex + idx)).join('');
+                    
+                    while (tempDiv.firstChild) {
+                        fragment.appendChild(tempDiv.firstChild);
+                    }
+                    
+                    container.appendChild(fragment);
+                    currentIndex += BATCH_SIZE;
+                    
+                    renderAnimationFrame = requestAnimationFrame(() => {
+                        setTimeout(renderBatch, 10);
+                    });
+                };
+                
+                isRendering = true;
+                setTimeout(() => {
+                    renderAnimationFrame = requestAnimationFrame(renderBatch);
+                }, 50);
+            } else {
+                isRendering = false;
+                container.classList.remove('rendering'); // 렌더링 완료
+            }
+        }
+
+        let alertsByIndex = {};
+        
+        function createAlertHTML(alert, index) {
+            // isAnomaly가 true면 항상 ANOMALY로 표시
+            let level, levelText;
+            if (alert.isAnomaly) {
+                level = 'anomaly';
+                levelText = 'ANOMALY';
+            } else {
+                level = (alert.warningLevel || 'NORMAL').toLowerCase();
+                levelText = alert.warningLevelKorean || alert.warningLevel || 'NORMAL';
+            }
+            alertsByIndex[index] = alert;
+
+            return `
+                <div class="alert-card level-${level}" onclick='showStationDetailByIndex(${index})'>
+                    <div class="alert-header">
+                        <span class="alert-station">STATION ${alert.observationCode}</span>
+                        <span class="alert-badge badge-level-${level}">${levelText.toUpperCase()}</span>
+                    </div>
+                    <div class="alert-time">${alert.observationTime ? formatKSTDateTime(alert.observationTime) : formatKSTDateTime(new Date())}</div>
+                    <div class="alert-metrics">
+                        <div class="metric">
+                            <div class="metric-label">Water Level</div>
+                            <div class="metric-value">${alert.waterLevel?.toFixed(2) || '--'} m</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Flow Rate</div>
+                            <div class="metric-value">${alert.flowRate ? alert.flowRate.toFixed(1) + ' CMS' : 'N/A'}</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Status</div>
+                            <div class="metric-value">${alert.isAnomaly ? 'ABNORMAL' : 'NORMAL'}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        async function showStationDetailByIndex(index) {
+            const alert = alertsByIndex[index];
+            if (!alert) return;
+            
+            // 관측소 정보가 없으면 DB에서 로드
+            if (!alert.stationInfo) {
+                try {
+                    const response = await fetch(`/api/alerts/station/${alert.observationCode}`);
+                    const stationDetail = await response.json();
+                    
+                    if (!stationDetail.error) {
+                        alert.stationInfo = {
+                            stationName: stationDetail.obsnm,
+                            agencyName: stationDetail.agcnm,
+                            address: stationDetail.addr,
+                            detailAddress: stationDetail.etcaddr,
+                            longitude: stationDetail.lon,
+                            latitude: stationDetail.lat,
+                            groundLevel: stationDetail.gdt,
+                            attentionLevel: parseFloat(stationDetail.attwl) || null,
+                            cautionLevel: parseFloat(stationDetail.wrnwl) || null,
+                            warningLevel: parseFloat(stationDetail.almwl) || null,
+                            criticalLevel: parseFloat(stationDetail.srswl) || null,
+                            planFloodLevel: stationDetail.pfh,
+                            forecastYn: stationDetail.fstnyn
+                        };
+                    }
+                } catch (err) {
+                    console.error('Failed to load station detail:', err);
+                }
+            }
+            
+            showStationDetail(alert);
+        }
+
+
+        function showStationDetail(alert) {
+            const content = document.getElementById('stationDetailContent');
+            const info = alert.stationInfo;
+            const currentLevel = alert.waterLevel || 0;
+            
+            let maxLevel = 10;
+            if (info) {
+                const levels = [
+                    info.attentionLevel,
+                    info.cautionLevel,
+                    info.warningLevel,
+                    info.criticalLevel
+                ].filter(l => l != null && l > 0);
+                
+                if (levels.length > 0) {
+                    maxLevel = Math.max(...levels) * 1.2;
+                }
+            }
+            
+            const percentage = Math.min((currentLevel / maxLevel) * 100, 100);
+            
+            let html = `
+                <div style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 2px solid var(--border-color);">
+                    <h3 style="font-size: 22px; margin-bottom: 6px; font-weight: 700;">${info?.stationName || alert.observationCode}</h3>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">📍 관측소 코드: <strong>${alert.observationCode}</strong></p>
+                    ${info?.agencyName ? `<p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">🏢 관리기관: <strong>${info.agencyName}</strong></p>` : ''}
+                    ${info?.address ? `<p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">📮 주소: ${info.address} ${info.detailAddress || ''}</p>` : ''}
+                    ${info?.longitude && info?.latitude ? `<p style="font-size: 13px; color: var(--text-secondary);">🌍 좌표: ${info.longitude}, ${info.latitude}</p>` : ''}
+                </div>
+                
+                <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 12px; color: var(--text-primary);">💧 현재 수위 정보</h4>
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <div class="detail-label">Current Water Level</div>
+                        <div class="detail-value" style="color: var(--accent-blue);">${currentLevel.toFixed(2)} m</div>
+                        <div class="threshold-bar">
+                            <div class="threshold-fill" style="width: ${percentage}%;"></div>
+                        </div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">Flow Rate</div>
+                        <div class="detail-value">${alert.flowRate ? alert.flowRate.toFixed(1) + ' CMS' : 'N/A'}</div>
+                    </div>
+                    ${info?.groundLevel ? `
+                    <div class="detail-item">
+                        <div class="detail-label">기준고도 (Ground Level)</div>
+                        <div class="detail-value">${info.groundLevel} m</div>
+                    </div>
+                    ` : ''}
+                    ${info?.planFloodLevel ? `
+                    <div class="detail-item">
+                        <div class="detail-label">계획홍수량</div>
+                        <div class="detail-value">${info.planFloodLevel}</div>
+                    </div>
+                    ` : ''}
+                </div>
+                
+                <h4 style="font-size: 14px; font-weight: 700; margin: 20px 0 12px; color: var(--text-primary);">⚠️ 기준 수위 (홍수 경보)</h4>
+                <div class="detail-grid">
+            `;
+            
+            if (info && (info.attentionLevel || info.cautionLevel || info.warningLevel || info.criticalLevel)) {
+                html += `
+                    <div class="detail-item">
+                        <div class="detail-label">🔵 관심 수위 (Attention)</div>
+                        <div class="detail-value" style="color: var(--accent-blue);">${info.attentionLevel ? info.attentionLevel.toFixed(2) + ' m' : 'N/A'}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">🟡 주의 수위 (Caution)</div>
+                        <div class="detail-value" style="color: var(--accent-yellow);">${info.cautionLevel ? info.cautionLevel.toFixed(2) + ' m' : 'N/A'}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">🟠 경계 수위 (Warning)</div>
+                        <div class="detail-value" style="color: var(--accent-orange);">${info.warningLevel ? info.warningLevel.toFixed(2) + ' m' : 'N/A'}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">🔴 심각 수위 (Critical)</div>
+                        <div class="detail-value" style="color: var(--accent-red);">${info.criticalLevel ? info.criticalLevel.toFixed(2) + ' m' : 'N/A'}</div>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="detail-item" style="grid-column: 1 / -1; background: var(--bg-tertiary); border-left: 3px solid var(--accent-orange);">
+                        <div class="detail-label">⚠️ 제원 정보</div>
+                        <div class="detail-value" style="font-size: 14px; color: var(--accent-orange);">관측소 기준 수위 정보를 불러오지 못했습니다</div>
+                    </div>
+                `;
+            }
+            
+            html += `</div>`;
+            content.innerHTML = html;
+        }
+
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                currentFilter = this.dataset.filter;
+                renderAlerts();
+            });
+        });
+
+        async function loadStations() {
+            try {
+                const response = await fetch('/api/alerts/stations');
+                const stations = await response.json();
+                
+                document.getElementById('stationCount').textContent = stations.length;
+                
+                const list = document.getElementById('stationList');
+                if (stations.length === 0) {
+                    list.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-icon">●</div>
+                            <div class="empty-text">No stations</div>
+                        </div>
+                    `;
+                } else {
+                    list.innerHTML = stations.map(s => `
+                        <div class="station-item" onclick="showStationDetailByCode('${s.code}')">
+                            <div>${s.name || 'Unknown'}</div>
+                            <div class="station-code">${s.code}</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                console.error('Load stations error:', err);
+            }
+        }
+        
+        async function showStationDetailByCode(code) {
+            try {
+                const response = await fetch(`/api/alerts/station/${code}`);
+                const stationDetail = await response.json();
+                
+                if (stationDetail.error) return;
+                
+                const recentAlert = alerts.find(a => a.observationCode === code);
+                
+                const stationInfo = {
+                    stationName: stationDetail.obsnm,
+                    agencyName: stationDetail.agcnm,
+                    address: stationDetail.addr,
+                    detailAddress: stationDetail.etcaddr,
+                    longitude: stationDetail.lon,
+                    latitude: stationDetail.lat,
+                    groundLevel: stationDetail.gdt,
+                    attentionLevel: parseFloat(stationDetail.attwl) || null,
+                    cautionLevel: parseFloat(stationDetail.wrnwl) || null,
+                    warningLevel: parseFloat(stationDetail.almwl) || null,
+                    criticalLevel: parseFloat(stationDetail.srswl) || null,
+                    planFloodLevel: stationDetail.pfh,
+                    forecastYn: stationDetail.fstnyn
+                };
+                
+                showStationDetail({
+                    observationCode: code,
+                    waterLevel: recentAlert?.waterLevel || 0,
+                    flowRate: recentAlert?.flowRate || null,
+                    warningLevel: recentAlert?.warningLevel || 'NORMAL',
+                    isAnomaly: recentAlert?.isAnomaly || false,
+                    stationInfo: stationInfo
+                });
+            } catch (err) {
+                console.error('Station detail error:', err);
+            }
+        }
+
+        async function updateNiFiMetrics() {
+            try {
+                const response = await fetch('/api/alerts/nifi-metrics');
+                const metrics = await response.json();
+                
+                if (metrics.status === 'ONLINE') {
+                    const summary = metrics.summary || {};
+                    const throughput = metrics.throughput || {};
+                    
+                    // Running Processors
+                    const runningProcessors = summary.runningProcessors || 0;
+                    document.getElementById('nifiRunningProcessors').textContent = runningProcessors;
+                    
+                    // Active Processors (데이터를 처리하는 프로세서 수)
+                    const activeProcessors = summary.processorsWithData || summary.activeProcessors || 0;
+                    document.getElementById('nifiActiveProcessors').textContent = activeProcessors;
+                    
+                    // Total Processed (Kafka로 전송된 메시지 수)
+                    const totalProcessed = summary.kafkaMessagesSent || 
+                                          summary.totalFlowFilesProcessedByProcessors || 
+                                          summary.totalFlowFilesOut || 0;
+                    document.getElementById('nifiTotalProcessed').textContent = totalProcessed.toLocaleString();
+                    
+                    // Errors & Warnings
+                    const errorCount = summary.bulletinErrorCount || 0;
+                    const warnCount = summary.bulletinWarnCount || 0;
+                    const totalIssues = errorCount + warnCount;
+                    document.getElementById('nifiErrors').textContent = totalIssues;
+                    // 에러가 있으면 빨간색, 경고만 있으면 노란색
+                    const errorsEl = document.getElementById('nifiErrors');
+                    if (errorCount > 0) {
+                        errorsEl.style.color = 'var(--accent-red)';
+                    } else if (warnCount > 0) {
+                        errorsEl.style.color = 'var(--accent-yellow)';
+                    } else {
+                        errorsEl.style.color = 'var(--text-muted)';
+                    }
+                    
+                    // 마지막 처리 시간 결정
+                    let lastProcessing = throughput.lastProcessingTime || summary.lastProcessingTime || 'N/A';
+                    let timeSince = throughput.timeSinceLastProcessing || summary.timeSinceLastProcessing || '--';
+                    
+                    // 시간 문자열이 있으면 KST로 변환
+                    if (lastProcessing !== 'N/A' && lastProcessing !== 'OFFLINE') {
+                        lastProcessing = safeFormatKSTDateTime(lastProcessing);
+                    }
+                    
+                    document.getElementById('nifiLastProcessing').textContent = lastProcessing;
+                    document.getElementById('nifiTimeSince').textContent = lastProcessing !== 'N/A' && lastProcessing !== 'OFFLINE' ? timeSince : (lastProcessing === 'OFFLINE' ? '' : '아직 처리된 데이터 없음');
+                    
+                    // 활동 상태 표시 (개선: isSystemActive, hasFlowData, processorsWithData 고려)
+                    const isSystemActive = summary.isSystemActive || false;
+                    const hasFlowData = throughput.hasFlowData || summary.hasFlowData || false;
+                    const hasRecentActivity = throughput.hasRecentActivity || summary.hasRecentActivity || false;
+                    const processorsWithData = summary.processorsWithData || 0;
+                    
+                    const hasActivity = isSystemActive || hasFlowData || hasRecentActivity || 
+                                       activeProcessors > 0 || processorsWithData > 0;
+                    
+                    const indicator = document.getElementById('nifiActivityIndicator');
+                    
+                    if (activeProcessors > 0 || processorsWithData > 0) {
+                        indicator.className = 'nifi-activity-indicator active';
+                        indicator.innerHTML = '<span class="nifi-activity-dot active"></span><span>PROCESSING</span>';
+                    } else if (hasFlowData) {
+                        indicator.className = 'nifi-activity-indicator active';
+                        indicator.innerHTML = '<span class="nifi-activity-dot active"></span><span>DATA READY</span>';
+                    } else {
+                        indicator.className = 'nifi-activity-indicator idle';
+                        indicator.innerHTML = '<span class="nifi-activity-dot idle"></span><span>IDLE</span>';
+                    }
+                    
+                } else {
+                    document.getElementById('nifiRunningProcessors').textContent = '--';
+                    document.getElementById('nifiActiveProcessors').textContent = '--';
+                    document.getElementById('nifiTotalProcessed').textContent = '--';
+                    document.getElementById('nifiErrors').textContent = '--';
+                    document.getElementById('nifiLastProcessing').textContent = 'OFFLINE';
+                    document.getElementById('nifiTimeSince').textContent = '';
+                    
+                    const indicator = document.getElementById('nifiActivityIndicator');
+                    indicator.className = 'nifi-activity-indicator idle';
+                    indicator.innerHTML = '<span class="nifi-activity-dot idle"></span><span>OFFLINE</span>';
+                }
+            } catch (err) {
+                console.error('NiFi update error:', err);
+            }
+        }
+        
+        async function loadNiFiMetricsDetail() {
+            const content = document.getElementById('nifiMetricsContent');
+            const scrollTop = content.scrollTop;
+            
+            try {
+                const response = await fetch('/api/alerts/nifi-metrics');
+                const metrics = await response.json();
+                
+                if (metrics.status === 'ONLINE') {
+                    let html = '<div style="display: grid; grid-template-columns: 1fr; gap: 20px;">';
+                    
+                    // Summary Section
+                    if (metrics.summary) {
+                        html += renderSummarySection(metrics.summary, metrics.throughput);
+                    }
+                    
+                    // System Metrics
+                    if (metrics.system) {
+                        html += renderSystemSection(metrics.system);
+                    }
+                    
+                    // Processor Status
+                    if (metrics.processorsByGroup && Object.keys(metrics.processorsByGroup).length > 0) {
+                        html += renderProcessorsByGroupSection(metrics.processorsByGroup);
+                    }
+                    
+                    // Bulletins
+                    if (metrics.bulletins && metrics.bulletins.length > 0) {
+                        html += renderBulletinsSection(metrics.bulletins, metrics.bulletinErrorCount, metrics.bulletinWarnCount);
+                    }
+                    
+                    html += '</div>';
+                    content.innerHTML = html;
+                    content.scrollTop = scrollTop;
+                } else {
+                    content.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-text" style="color: var(--accent-red);">NiFi is offline or unreachable</div>
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                console.error('NiFi metrics error:', err);
+                content.innerHTML = '<div class="empty-state"><div class="empty-text" style="color: var(--accent-red);">Failed to load</div></div>';
+            }
+        }
+        
+        async function toggleNiFiMetrics() {
+            const card = document.getElementById('nifiMetricsCard');
+            const content = document.getElementById('nifiMetricsContent');
+            
+            if (card.style.display === 'none') {
+                content.innerHTML = '<div class="empty-state"><div class="empty-text">Loading...</div></div>';
+                card.style.display = 'block';
+                card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                
+                await loadNiFiMetricsDetail();
+                
+                if (nifiMetricsDetailInterval) clearInterval(nifiMetricsDetailInterval);
+                nifiMetricsDetailInterval = setInterval(loadNiFiMetricsDetail, 60000);
+            } else {
+                closeNiFiMetrics();
+            }
+        }
+        
+
+        function renderSummarySection(summary, throughput) {
+            const hasActivity = summary.hasRecentActivity || (throughput && throughput.hasRecentActivity);
+            
+            return `
+                <div>
+                    <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 12px; color: var(--text-primary);">
+                        📊 Overview
+                        ${hasActivity ? '<span style="color: var(--accent-green); font-size: 12px; margin-left: 8px;">● ACTIVE</span>' : '<span style="color: var(--text-muted); font-size: 12px; margin-left: 8px;">○ IDLE</span>'}
+                    </h4>
+                    <div class="detail-grid" style="grid-template-columns: repeat(4, 1fr);">
+                        <div class="detail-item" title="마지막 데이터 처리 시간">
+                            <div class="detail-label">Last Processing</div>
+                            <div class="detail-value" style="font-size: 14px;">${safeFormatKSTDateTime(summary.lastProcessingTime)}</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">${summary.timeSinceLastProcessing || ''}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Processors</div>
+                            <div class="detail-value">
+                                <span style="color: var(--accent-green);">${summary.runningProcessors || 0}</span>
+                                <span style="color: var(--text-muted); font-size: 14px;">/</span>
+                                <span style="color: var(--text-muted);">${summary.totalProcessors || 0}</span>
+                            </div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">FlowFiles (In/Out)</div>
+                            <div class="detail-value" style="font-size: 14px;">
+                                ${(summary.totalFlowFilesIn || 0).toLocaleString()} / ${(summary.totalFlowFilesOut || 0).toLocaleString()}
+                            </div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Queued</div>
+                            <div class="detail-value" style="font-size: 14px;">${summary.queuedSize || summary.queuedCount || 0}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Render System Section
+        function renderSystemSection(system) {
+            const heapPercent = system.heapUsagePercent || 0;
+            const heapColor = heapPercent >= 90 ? 'var(--accent-red)' : 
+                             heapPercent >= 80 ? 'var(--accent-orange)' : 
+                             heapPercent >= 70 ? 'var(--accent-yellow)' : 
+                             'var(--accent-green)';
+            
+            let html = `
+                <div>
+                    <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 12px; color: var(--text-primary);">🖥️ System Resources</h4>
+                    <div class="detail-grid" style="grid-template-columns: repeat(3, 1fr);">
+                        <div class="detail-item">
+                            <div class="detail-label">CPU Load</div>
+                            <div class="detail-value">${system.cpuLoadAverage?.toFixed(2) || 'N/A'}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Threads</div>
+                            <div class="detail-value">${system.totalThreads || 0}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Uptime</div>
+                            <div class="detail-value" style="font-size: 14px;">${system.uptime || 'N/A'}</div>
+                        </div>
+                        <div class="detail-item" style="grid-column: span 2;">
+                            <div class="detail-label">Heap Memory Usage</div>
+                            <div style="display: flex; align-items: center; gap: 12px; margin-top: 6px;">
+                                <div class="detail-value" style="font-size: 24px; color: ${heapColor};">${heapPercent.toFixed(1)}%</div>
+                                <div style="flex: 1;">
+                                    <div class="threshold-bar" style="height: 10px;">
+                                        <div class="threshold-fill" style="width: ${Math.min(heapPercent, 100)}%; background: ${heapColor};"></div>
+                                    </div>
+                                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px;">
+                                        ${system.usedHeapFormatted || 'N/A'} / ${system.maxHeapFormatted || 'N/A'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+            `;
+            
+            // 저장소 정보 (메모리 옆에 배치)
+            if (system.contentRepoUsagePercent) {
+                html += `
+                        <div class="detail-item">
+                            <div class="detail-label">Content Repository</div>
+                            <div class="detail-value" style="font-size: 20px; color: ${parseInt(system.contentRepoUsagePercent) >= 90 ? 'var(--accent-red)' : 'var(--accent-green)'};">${system.contentRepoUsagePercent}</div>
+                            <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">데이터 저장공간</div>
+                        </div>
+                `;
+            }
+            
+            html += `</div>`;
+            
+            html += `</div>`;
+            
+            return html;
+        }
+        
+        function renderProcessorsByGroupSection(processorsByGroup) {
+            const formatTime = (ms) => {
+                if (ms >= 1000) {
+                    return (ms / 1000).toFixed(1) + 's';
+                }
+                return ms < 1 ? ms.toFixed(2) + 'ms' : ms.toFixed(0) + 'ms';
+            };
+            
+            const renderProcessorItem = (proc) => {
+                const isActive = proc.isActive || proc.flowFilesIn > 0 || proc.flowFilesOut > 0;
+                const statusColor = proc.runStatus === 'Running' ? 'var(--accent-green)' : 'var(--text-muted)';
+                const avgTimeMs = proc.avgProcessingTimeMs || 0;
+                const totalTimeMs = proc.totalProcessingTimeMs || 0;
+                const lastActivity = proc.lastActivityTime || proc.lastActivityChange;
+                const timeSince = proc.timeSinceLastActivity;
+                
+                return `
+                    <div class="processor-item ${isActive ? 'active' : ''}" style="margin-left: 16px;">
+                        <div class="processor-name">
+                            <span style="color: ${statusColor};">●</span>
+                            <span>${proc.name}</span>
+                            ${isActive ? '<span style="background: rgba(16, 185, 129, 0.15); color: var(--accent-green); padding: 2px 6px; border-radius: 4px; font-size: 10px;">ACTIVE</span>' : ''}
+                        </div>
+                        <div class="processor-stats">
+                            <div class="processor-stat">
+                                <span style="color: var(--text-muted);">In:</span>
+                                <strong style="color: ${proc.flowFilesIn > 0 ? 'var(--accent-blue)' : 'var(--text-muted)'};">${proc.flowFilesIn || 0}</strong>
+                            </div>
+                            <div class="processor-stat">
+                                <span style="color: var(--text-muted);">Out:</span>
+                                <strong style="color: ${proc.flowFilesOut > 0 ? 'var(--accent-green)' : 'var(--text-muted)'};">${proc.flowFilesOut || 0}</strong>
+                            </div>
+                            <div class="processor-stat">
+                                <span style="color: var(--text-muted);">Tasks:</span>
+                                <strong>${proc.tasks || proc.taskCount || 0}</strong>
+                            </div>
+                            ${avgTimeMs > 0 ? `
+                            <div class="processor-stat" title="FlowFile 1개당 평균 처리 시간">
+                                <span style="color: var(--text-muted);">Avg:</span>
+                                <strong style="color: ${avgTimeMs > 1000 ? 'var(--accent-orange)' : avgTimeMs > 500 ? 'var(--accent-yellow)' : 'var(--accent-green)'};">
+                                    ${formatTime(avgTimeMs)}
+                                </strong>
+                            </div>
+                            ` : ''}
+                            ${totalTimeMs > 0 ? `
+                            <div class="processor-stat" title="모든 작업을 실행하는데 걸린 전체 시간">
+                                <span style="color: var(--text-muted);">Total:</span>
+                                <strong style="color: var(--accent-purple);">
+                                    ${formatTime(totalTimeMs)}
+                                </strong>
+                            </div>
+                            ` : ''}
+                            ${lastActivity && lastActivity !== 'N/A' ? `
+                            <div class="processor-stat" title="마지막 데이터 처리 시간">
+                                <span style="color: var(--text-muted);">Last:</span>
+                                <strong style="font-size: 11px;">${timeSince || lastActivity}</strong>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            };
+            
+            let totalProcessors = 0;
+            Object.values(processorsByGroup).forEach(procs => totalProcessors += procs.length);
+            
+            let html = `
+                <div>
+                    <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 12px; color: var(--text-primary);">
+                        ⚙️ Processors (${totalProcessors})
+                    </h4>
+            `;
+            
+            Object.entries(processorsByGroup).forEach(([groupName, processors]) => {
+                const activeCount = processors.filter(p => p.isActive || p.flowFilesIn > 0 || p.flowFilesOut > 0).length;
+                const runningCount = processors.filter(p => p.runStatus === 'Running').length;
+                
+                html += `
+                    <div style="margin-bottom: 16px;">
+                        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 8px; border-left: 3px solid var(--accent-blue);">
+                            <strong style="font-size: 13px; color: var(--text-primary);">📁 ${groupName}</strong>
+                            <span style="font-size: 11px; color: var(--text-muted);">(${processors.length}개)</span>
+                            ${runningCount > 0 ? `<span style="font-size: 11px; color: var(--accent-green);">● ${runningCount} Running</span>` : ''}
+                            ${activeCount > 0 ? `<span style="font-size: 11px; color: var(--accent-blue);">⚡ ${activeCount} Active</span>` : ''}
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                `;
+                
+                const sortedProcessors = [...processors].sort((a, b) => {
+                    const aActive = a.isActive || a.flowFilesIn > 0 || a.flowFilesOut > 0;
+                    const bActive = b.isActive || b.flowFilesIn > 0 || b.flowFilesOut > 0;
+                    if (aActive && !bActive) return -1;
+                    if (!aActive && bActive) return 1;
+                    if (a.runStatus === 'Running' && b.runStatus !== 'Running') return -1;
+                    if (a.runStatus !== 'Running' && b.runStatus === 'Running') return 1;
+                    return 0;
+                });
+                
+                sortedProcessors.forEach(proc => {
+                    html += renderProcessorItem(proc);
+                });
+                
+                html += `
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            return html;
+        }
+        
+        function renderBulletinsSection(bulletins, errorCount, warnCount) {
+            if (errorCount === 0 && warnCount === 0) {
+                return '';
+            }
+            
+            let html = `
+                <div>
+                    <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 12px; color: var(--accent-red);">
+                        🔔 Alerts
+                        ${errorCount > 0 ? `<span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px;">${errorCount} Errors</span>` : ''}
+                        ${warnCount > 0 ? `<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px;">${warnCount} Warnings</span>` : ''}
+                    </h4>
+                    <div style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto;">
+            `;
+            
+            bulletins.filter(b => b.level === 'ERROR' || b.level === 'WARNING' || b.level === 'WARN')
+                .slice(0, 10)
+                .forEach(bulletin => {
+                    const isError = bulletin.level === 'ERROR';
+                    html += `
+                        <div class="detail-item" style="border-left: 3px solid ${isError ? 'var(--accent-red)' : 'var(--accent-orange)'};">
+                            <div class="detail-label" style="color: ${isError ? 'var(--accent-red)' : 'var(--accent-orange)'};">
+                                [${bulletin.level}] ${bulletin.sourceName || 'Unknown'}
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                                ${bulletin.message || 'No message'}
+                            </div>
+                            <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">
+                                ${safeFormatKSTDateTime(bulletin.timestamp)}
+                            </div>
+                        </div>
+                    `;
+                });
+            
+            html += '</div></div>';
+            return html;
+        }
+        
+        function closeNiFiMetrics() {
+            document.getElementById('nifiMetricsCard').style.display = 'none';
+            if (nifiMetricsDetailInterval) {
+                clearInterval(nifiMetricsDetailInterval);
+                nifiMetricsDetailInterval = null;
+            }
+        }
+        
+        function formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+        }
+        
+        async function checkSystemStatus() {
+            try {
+                const response = await fetch('/api/alerts/system-status');
+                const status = await response.json();
+                const kafkaEl = document.getElementById('kafkaStatus');
+                const kafkaStatus = status.kafka?.status || 'UNKNOWN';
+                const kafkaBadgeClass = kafkaStatus === 'ONLINE' ? 'online' : kafkaStatus === 'OFFLINE' ? 'offline' : 'unknown';
+                kafkaEl.innerHTML = `
+                    <span class="system-label">
+                        <span class="system-icon">●</span>
+                        Kafka Broker
+                    </span>
+                    <span class="badge badge-${kafkaBadgeClass}">${kafkaStatus}</span>
+                `;
+                
+                // Kafka Streams
+                const streamsEl = document.getElementById('streamsStatus');
+                const streamsStatus = status.kafkaStreams?.status || 'UNKNOWN';
+                const streamsBadgeClass = streamsStatus === 'ONLINE' ? 'online' : streamsStatus === 'OFFLINE' ? 'offline' : 'unknown';
+                streamsEl.innerHTML = `
+                    <span class="system-label">
+                        <span class="system-icon">●</span>
+                        Stream Processor
+                    </span>
+                    <span class="badge badge-${streamsBadgeClass}">${streamsStatus}</span>
+                `;
+                
+                // NiFi
+                const nifiEl = document.getElementById('nifiStatus');
+                const nifiStatus = status.nifi?.status || 'UNKNOWN';
+                const nifiBadgeClass = nifiStatus === 'ONLINE' ? 'online' : nifiStatus === 'OFFLINE' ? 'offline' : 'unknown';
+                nifiEl.innerHTML = `
+                    <span class="system-label">
+                        <span class="system-icon">●</span>
+                        Data Collector
+                    </span>
+                    <span class="badge badge-${nifiBadgeClass}">${nifiStatus}</span>
+                `;
+            } catch (err) {
+                console.error('[ERROR] System status:', err);
+            }
+        }
+
+        // Initialize
+        connectSSE();
+        loadStations();
+        checkSystemStatus();
+        updateNiFiMetrics();
+        
+        setInterval(checkSystemStatus, 10000);
+        setInterval(updateNiFiMetrics, 5000);
+    </script>
+</body>
+</html>

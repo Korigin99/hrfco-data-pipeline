@@ -1,0 +1,79 @@
+// HRFCO Kafka Streams 애플리케이션 빌드 설정
+
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'hrfco.kafka.streams'
+version = '1.0.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Kafka Streams
+    implementation 'org.apache.kafka:kafka-streams:3.6.1'
+    implementation 'org.apache.kafka:kafka-clients:3.6.1'
+    
+    // JSON 처리
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
+    
+    // 로깅
+    implementation 'org.slf4j:slf4j-api:2.0.9'
+    implementation 'org.slf4j:slf4j-simple:2.0.9'
+    
+    // MinIO SDK
+    implementation 'io.minio:minio:8.5.7'
+    
+    // PostgreSQL JDBC (TimescaleDB)
+    implementation 'org.postgresql:postgresql:42.7.1'
+    
+    // HikariCP (Connection Pool)
+    implementation 'com.zaxxer:HikariCP:5.1.0'
+    
+    // MongoDB Driver
+    implementation 'org.mongodb:mongodb-driver-sync:4.9.1'
+    
+    // Testing
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.1'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+// 한글 주석 처리를 위한 UTF-8 인코딩 설정
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+application {
+    mainClass = 'hrfco.kafka.streams.HRFCOStreamsApp'
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'hrfco.kafka.streams.HRFCOStreamsApp'
+    }
+    archiveBaseName = 'hrfco-kafka-streams'
+    archiveVersion = '1.0.0'
+    from {
+        configurations.runtimeClasspath.collect { 
+            it.isDirectory() ? it : zipTree(it).matching {
+                exclude 'META-INF/*.SF'
+                exclude 'META-INF/*.DSA'
+                exclude 'META-INF/*.RSA'
+            }
+        }
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
