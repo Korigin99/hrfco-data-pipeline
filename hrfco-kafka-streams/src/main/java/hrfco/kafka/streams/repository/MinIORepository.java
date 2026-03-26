@@ -10,6 +10,8 @@ import io.minio.PutObjectArgs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import hrfco.kafka.streams.util.RetryUtil;
+
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 
@@ -74,22 +76,23 @@ public class MinIORepository {
      * @param jsonContent JSON 문자열
      */
     public void saveJson(String objectPath, String jsonContent) {
-        try {
-            byte[] contentBytes = jsonContent.getBytes(StandardCharsets.UTF_8);
-            ByteArrayInputStream inputStream = new ByteArrayInputStream(contentBytes);
-            
-            minioClient.putObject(PutObjectArgs.builder()
-                    .bucket(bucketName)
-                    .object(objectPath)
-                    .stream(inputStream, contentBytes.length, -1)
-                    .contentType("application/json")
-                    .build());
-            
-            logger.debug("Saved JSON to MinIO: {}", objectPath);
-        } catch (Exception e) {
-            logger.error("Failed to save JSON to MinIO: {}", objectPath, e);
-            throw new RuntimeException("MinIO save failed", e);
-        }
+        RetryUtil.executeWithRetry(() -> {
+            try {
+                byte[] contentBytes = jsonContent.getBytes(StandardCharsets.UTF_8);
+                ByteArrayInputStream inputStream = new ByteArrayInputStream(contentBytes);
+
+                minioClient.putObject(PutObjectArgs.builder()
+                        .bucket(bucketName)
+                        .object(objectPath)
+                        .stream(inputStream, contentBytes.length, -1)
+                        .contentType("application/json")
+                        .build());
+
+                logger.debug("Saved JSON to MinIO: {}", objectPath);
+            } catch (Exception e) {
+                throw new RuntimeException("MinIO save failed: " + objectPath, e);
+            }
+        }, "MinIO.saveJson");
     }
     
     /**

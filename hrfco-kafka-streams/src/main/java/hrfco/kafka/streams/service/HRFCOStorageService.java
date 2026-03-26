@@ -17,6 +17,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -65,25 +67,47 @@ public class HRFCOStorageService {
         logger.info("Saving HRFCO water level data - ObsCode: {}, IsAnomaly: {}, Warning: {}", 
                 waterLevelData.getObservationCode(), isAnomaly, floodWarningLevel);
         
+        // 병렬로 3개 저장소에 동시 저장
+        CompletableFuture<Void> minIOFuture = CompletableFuture.runAsync(
+            () -> saveToMinIO(waterLevelData, isAnomaly), executorService);
+
+        CompletableFuture<Void> timescaleDBFuture = CompletableFuture.runAsync(
+            () -> saveToTimescaleDB(waterLevelData, isAnomaly, floodWarningLevel), executorService);
+
+        CompletableFuture<Void> mongoDBFuture = CompletableFuture.runAsync(
+            () -> saveToMongoDB(originalJson, isAnomaly, floodWarningLevel), executorService);
+
+        // 각 저장소별 결과를 개별 추적
+        List<String> failures = new ArrayList<>();
+
         try {
-            // 병렬로 3개 저장소에 동시 저장
-            CompletableFuture<Void> minIOFuture = CompletableFuture.runAsync(
-                () -> saveToMinIO(waterLevelData, isAnomaly), executorService);
-            
-            CompletableFuture<Void> timescaleDBFuture = CompletableFuture.runAsync(
-                () -> saveToTimescaleDB(waterLevelData, isAnomaly, floodWarningLevel), executorService);
-            
-            CompletableFuture<Void> mongoDBFuture = CompletableFuture.runAsync(
-                () -> saveToMongoDB(originalJson, isAnomaly, floodWarningLevel), executorService);
-            
-            // 모든 저장 작업 완료 대기 (최대 30초 타임아웃)
-            CompletableFuture.allOf(minIOFuture, timescaleDBFuture, mongoDBFuture)
-                .get(30, TimeUnit.SECONDS);
-            
-            logger.info("HRFCO water level data saved successfully to all storages (parallel)");
+            minIOFuture.get(30, TimeUnit.SECONDS);
         } catch (Exception e) {
-            logger.error("Failed to save HRFCO water level data", e);
-            throw new RuntimeException("HRFCO data save failed", e);
+            failures.add("MinIO");
+            logger.error("MinIO storage failed for ObsCode: {}", waterLevelData.getObservationCode(), e);
+        }
+
+        try {
+            timescaleDBFuture.get(30, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            failures.add("TimescaleDB");
+            logger.error("TimescaleDB storage failed for ObsCode: {}", waterLevelData.getObservationCode(), e);
+        }
+
+        try {
+            mongoDBFuture.get(30, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            failures.add("MongoDB");
+            logger.error("MongoDB storage failed for ObsCode: {}", waterLevelData.getObservationCode(), e);
+        }
+
+        if (failures.isEmpty()) {
+            logger.info("HRFCO water level data saved successfully to all storages (parallel)");
+        } else if (failures.size() == 3) {
+            throw new RuntimeException("All storages failed: " + String.join(", ", failures));
+        } else {
+            logger.warn("Partial storage failure for ObsCode: {} - Failed: [{}], Succeeded: {}/3",
+                waterLevelData.getObservationCode(), String.join(", ", failures), 3 - failures.size());
         }
     }
     
@@ -113,11 +137,11 @@ public class HRFCOStorageService {
             String type = isAnomaly ? "anomalies" : "normal";
             String objectPath = buildMinIOPath(type, waterLevelData);
             String json = objectMapper.writeValueAsString(waterLevelData);
-            
+
             minIO.saveJson(objectPath, json);
             logger.debug("Saved to MinIO: {}", objectPath);
         } catch (Exception e) {
-            logger.error("Failed to save to MinIO", e);
+            throw new RuntimeException("Failed to save to MinIO", e);
         }
     }
     
@@ -127,7 +151,7 @@ public class HRFCOStorageService {
     private void saveToTimescaleDB(WaterLevelData waterLevelData, boolean isAnomaly, String floodWarning) {
         try {
             Timestamp timestamp = parseTimestamp(waterLevelData.getFormattedObservationTime());
-            
+
             timescaleDB.insertWaterLevelData(
                 waterLevelData.getObservationCode(),
                 timestamp,
@@ -136,10 +160,10 @@ public class HRFCOStorageService {
                 isAnomaly,
                 floodWarning
             );
-            
+
             logger.debug("Saved to TimescaleDB hrfco schema");
         } catch (Exception e) {
-            logger.error("Failed to save to TimescaleDB", e);
+            throw new RuntimeException("Failed to save to TimescaleDB", e);
         }
     }
     
@@ -149,15 +173,14 @@ public class HRFCOStorageService {
     private void saveToMongoDB(String originalJson, boolean isAnomaly, String floodWarning) {
         try {
             Document doc = Document.parse(originalJson);
-            // 메타데이터 추가
             doc.append("is_anomaly", isAnomaly);
             doc.append("flood_warning_level", floodWarning);
             doc.append("created_at", new java.util.Date());
-            
+
             mongoDB.insertDocument("water_level_data", doc);
             logger.debug("Saved to MongoDB water_level_data collection");
         } catch (Exception e) {
-            logger.error("Failed to save to MongoDB", e);
+            throw new RuntimeException("Failed to save to MongoDB", e);
         }
     }
     

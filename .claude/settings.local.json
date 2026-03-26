@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /d/gwkim/git/hrfco-data-pipeline -type d -not -path */.* -not -path */build* -not -path */.gradle*)",
+      "Bash(./gradlew test:*)"
+    ]
+  }
+}

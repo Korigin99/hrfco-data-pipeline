@@ -14,7 +14,7 @@ public class HomeController {
      */
     @GetMapping("/")
     public String home() {
-        return "test.html";
+        return "dashboard.html";
     }
     
     /**
@@ -22,7 +22,7 @@ public class HomeController {
      */
     @GetMapping("/monitoring")
     public String monitoring() {
-        return "test.html";
+        return "dashboard.html";
     }
 }
 

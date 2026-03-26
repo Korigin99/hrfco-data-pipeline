@@ -3,6 +3,7 @@
 
 package hrfco.kafka.streams.repository;
 
+import hrfco.kafka.streams.util.RetryUtil;
 import org.bson.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,34 +47,26 @@ public class MongoDBRepository {
      * @param jsonData JSON 문자열
      */
     public void insertDocument(String collectionName, String jsonData) {
-        try {
+        RetryUtil.executeWithRetry(() -> {
             MongoCollection<Document> collection = database.getCollection(collectionName);
             Document document = Document.parse(jsonData);
             collection.insertOne(document);
-            
             logger.debug("Inserted document to MongoDB collection: {}", collectionName);
-        } catch (Exception e) {
-            logger.error("Failed to insert document to MongoDB", e);
-            throw new RuntimeException("MongoDB insert failed", e);
-        }
+        }, "MongoDB.insertDocument");
     }
-    
+
     /**
      * Document 객체로 저장
-     * 
+     *
      * @param collectionName 컬렉션 이름
      * @param document Document 객체
      */
     public void insertDocument(String collectionName, Document document) {
-        try {
+        RetryUtil.executeWithRetry(() -> {
             MongoCollection<Document> collection = database.getCollection(collectionName);
             collection.insertOne(document);
-            
             logger.debug("Inserted document to MongoDB collection: {}", collectionName);
-        } catch (Exception e) {
-            logger.error("Failed to insert document to MongoDB", e);
-            throw new RuntimeException("MongoDB insert failed", e);
-        }
+        }, "MongoDB.insertDocument");
     }
     
     /**
@@ -90,25 +83,20 @@ public class MongoDBRepository {
      * @param stationData 관측소 임계값 데이터 Document
      */
     public void upsertStationThreshold(String observationCode, Document stationData) {
-        try {
+        RetryUtil.executeWithRetry(() -> {
             MongoCollection<Document> collection = database.getCollection("observation_stations");
-            
-            // 관측소 코드를 _id로 설정
+
             stationData.put("_id", observationCode);
             stationData.put("updated_at", new java.util.Date());
-            
-            // upsert (있으면 업데이트, 없으면 삽입)
+
             collection.replaceOne(
                 new Document("_id", observationCode),
                 stationData,
                 new com.mongodb.client.model.ReplaceOptions().upsert(true)
             );
-            
+
             logger.debug("Upserted station threshold: {}", observationCode);
-        } catch (Exception e) {
-            logger.error("Failed to upsert station threshold", e);
-            throw new RuntimeException("MongoDB upsert failed", e);
-        }
+        }, "MongoDB.upsertStationThreshold");
     }
     
     /**
