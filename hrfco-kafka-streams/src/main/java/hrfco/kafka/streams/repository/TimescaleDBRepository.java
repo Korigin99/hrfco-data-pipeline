@@ -8,6 +8,8 @@ import com.zaxxer.hikari.HikariDataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import hrfco.kafka.streams.util.RetryUtil;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
@@ -47,16 +49,15 @@ public class TimescaleDBRepository {
      */
     private void initializeDatabase() {
         createSchemas();
-        createIoTTables();
         createHRFCOTables();
     }
-    
+
     /**
-     * 서비스별 스키마 생성
+     * HRFCO 스키마 생성
      */
     private void createSchemas() {
         try (Connection conn = dataSource.getConnection()) {
-            String[] schemas = {"iot", "hrfco"};
+            String[] schemas = {"hrfco"};
             
             for (String schema : schemas) {
                 String sql = String.format("CREATE SCHEMA IF NOT EXISTS %s", schema);
@@ -71,62 +72,6 @@ public class TimescaleDBRepository {
         } catch (SQLException e) {
             logger.error("Failed to create schemas", e);
             throw new RuntimeException("Schema initialization failed", e);
-        }
-    }
-    
-    /**
-     * IoT 센서 데이터 테이블 생성
-     */
-    private void createIoTTables() {
-        try (Connection conn = dataSource.getConnection()) {
-            String createTableSQL = """
-                CREATE TABLE IF NOT EXISTS iot.sensor_data (
-                    id BIGSERIAL,
-                    sensor_id VARCHAR(100) NOT NULL,
-                    timestamp TIMESTAMPTZ NOT NULL,
-                    temperature DOUBLE PRECISION,
-                    humidity DOUBLE PRECISION,
-                    value DOUBLE PRECISION,
-                    is_anomaly BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMPTZ DEFAULT NOW(),
-                    PRIMARY KEY (id, timestamp)
-                )
-                """;
-            
-            try (PreparedStatement stmt = conn.prepareStatement(createTableSQL)) {
-                stmt.execute();
-            }
-            
-            // Hypertable 생성
-            String hypertableSQL = """
-                SELECT create_hypertable('iot.sensor_data', 'timestamp', if_not_exists => TRUE)
-                """;
-            
-            try (PreparedStatement stmt = conn.prepareStatement(hypertableSQL)) {
-                stmt.execute();
-            } catch (SQLException e) {
-                logger.debug("IoT hypertable: {}", e.getMessage());
-            }
-            
-            // 인덱스 생성
-            String[] indexes = {
-                "CREATE INDEX IF NOT EXISTS idx_iot_sensor_id ON iot.sensor_data(sensor_id)",
-                "CREATE INDEX IF NOT EXISTS idx_iot_timestamp ON iot.sensor_data(timestamp)",
-                "CREATE INDEX IF NOT EXISTS idx_iot_anomaly ON iot.sensor_data(is_anomaly)"
-            };
-            
-            for (String indexSQL : indexes) {
-                try (PreparedStatement stmt = conn.prepareStatement(indexSQL)) {
-                    stmt.execute();
-                } catch (SQLException e) {
-                    logger.debug("IoT index: {}", e.getMessage());
-                }
-            }
-            
-            logger.info("IoT tables initialized in iot schema");
-        } catch (SQLException e) {
-            logger.error("Failed to create IoT tables", e);
-            throw new RuntimeException("IoT table creation failed", e);
         }
     }
     
@@ -188,61 +133,34 @@ public class TimescaleDBRepository {
     }
     
     /**
-     * IoT 센서 데이터 삽입
-     */
-    public void insertSensorData(String sensorId, Timestamp timestamp, Double temperature, 
-                                  Double humidity, Double value, boolean isAnomaly) {
-        String sql = """
-            INSERT INTO iot.sensor_data (sensor_id, timestamp, temperature, humidity, value, is_anomaly)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """;
-        
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            stmt.setString(1, sensorId);
-            stmt.setTimestamp(2, timestamp);
-            stmt.setObject(3, temperature);
-            stmt.setObject(4, humidity);
-            stmt.setObject(5, value);
-            stmt.setBoolean(6, isAnomaly);
-            
-            stmt.executeUpdate();
-            logger.debug("Inserted sensor data: {}", sensorId);
-        } catch (SQLException e) {
-            logger.error("Failed to insert sensor data", e);
-            throw new RuntimeException("Database insert failed", e);
-        }
-    }
-    
-    /**
      * 한강 수위 데이터 삽입
      */
     public void insertWaterLevelData(String obsCode, Timestamp obsTime,
                                       Double waterLevel, Double flowRate,
                                       boolean isAnomaly, String floodWarning) {
-        String sql = """
-            INSERT INTO hrfco.water_level_data 
-            (observation_code, observation_time, water_level, flow_rate, is_anomaly, flood_warning_level)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """;
-        
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            stmt.setString(1, obsCode);
-            stmt.setTimestamp(2, obsTime);
-            stmt.setObject(3, waterLevel);
-            stmt.setObject(4, flowRate);
-            stmt.setBoolean(5, isAnomaly);
-            stmt.setString(6, floodWarning);
-            
-            stmt.executeUpdate();
-            logger.debug("Inserted water level data: {}", obsCode);
-        } catch (SQLException e) {
-            logger.error("Failed to insert water level data", e);
-            throw new RuntimeException("Database insert failed", e);
-        }
+        RetryUtil.executeWithRetry(() -> {
+            String sql = """
+                INSERT INTO hrfco.water_level_data
+                (observation_code, observation_time, water_level, flow_rate, is_anomaly, flood_warning_level)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """;
+
+            try (Connection conn = dataSource.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+                stmt.setString(1, obsCode);
+                stmt.setTimestamp(2, obsTime);
+                stmt.setObject(3, waterLevel);
+                stmt.setObject(4, flowRate);
+                stmt.setBoolean(5, isAnomaly);
+                stmt.setString(6, floodWarning);
+
+                stmt.executeUpdate();
+                logger.debug("Inserted water level data: {}", obsCode);
+            } catch (SQLException e) {
+                throw new RuntimeException("Database insert failed", e);
+            }
+        }, "TimescaleDB.insertWaterLevelData");
     }
     
     /**

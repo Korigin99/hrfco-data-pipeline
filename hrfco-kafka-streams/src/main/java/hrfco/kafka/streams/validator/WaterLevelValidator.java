@@ -9,14 +9,39 @@ import org.slf4j.LoggerFactory;
 
 public class WaterLevelValidator {
     private static final Logger logger = LoggerFactory.getLogger(WaterLevelValidator.class);
-    
-    // 수위 기본 범위 (m) - 한강 기준 범위
-    private static final double MIN_WATER_LEVEL = -10.0;  // 최저 수위
-    private static final double MAX_WATER_LEVEL = 50.0;   // 최고 수위 (홍수 경보 수위 이상)
-    
-    // 유량 기본 범위 (CMS)
-    private static final double MIN_FLOW_RATE = 0.0;
-    private static final double MAX_FLOW_RATE = 50000.0;
+
+    // 수위 기본 범위 (m) - 한강 기준 범위 (환경변수로 오버라이드 가능)
+    private static final double MIN_WATER_LEVEL;
+    private static final double MAX_WATER_LEVEL;
+
+    // 유량 기본 범위 (CMS) (환경변수로 오버라이드 가능)
+    private static final double MIN_FLOW_RATE;
+    private static final double MAX_FLOW_RATE;
+
+    // 기본값 상수
+    public static final double DEFAULT_MIN_WATER_LEVEL = -10.0;
+    public static final double DEFAULT_MAX_WATER_LEVEL = 50.0;
+    public static final double DEFAULT_MIN_FLOW_RATE = 0.0;
+    public static final double DEFAULT_MAX_FLOW_RATE = 50000.0;
+
+    static {
+        MIN_WATER_LEVEL = Double.parseDouble(
+            System.getenv().getOrDefault("VALIDATOR_MIN_WATER_LEVEL", String.valueOf(DEFAULT_MIN_WATER_LEVEL)));
+        MAX_WATER_LEVEL = Double.parseDouble(
+            System.getenv().getOrDefault("VALIDATOR_MAX_WATER_LEVEL", String.valueOf(DEFAULT_MAX_WATER_LEVEL)));
+        MIN_FLOW_RATE = Double.parseDouble(
+            System.getenv().getOrDefault("VALIDATOR_MIN_FLOW_RATE", String.valueOf(DEFAULT_MIN_FLOW_RATE)));
+        MAX_FLOW_RATE = Double.parseDouble(
+            System.getenv().getOrDefault("VALIDATOR_MAX_FLOW_RATE", String.valueOf(DEFAULT_MAX_FLOW_RATE)));
+
+        logger.info("Validator ranges - WaterLevel: [{}, {}], FlowRate: [{}, {}]",
+            MIN_WATER_LEVEL, MAX_WATER_LEVEL, MIN_FLOW_RATE, MAX_FLOW_RATE);
+    }
+
+    public static double getMinWaterLevel() { return MIN_WATER_LEVEL; }
+    public static double getMaxWaterLevel() { return MAX_WATER_LEVEL; }
+    public static double getMinFlowRate() { return MIN_FLOW_RATE; }
+    public static double getMaxFlowRate() { return MAX_FLOW_RATE; }
     
     /**
      * 필수 필드 검증
