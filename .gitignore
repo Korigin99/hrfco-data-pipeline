@@ -7,7 +7,6 @@ logs/
 
 # 데이터 디렉토리 (로컬 개발용)
 data/
-nifi/
 # kafka/ 디렉토리 무시 (루트의 kafka 디렉토리만, hrfco-kafka-streams의 소스는 제외)
 /kafka/
 # hrfco-kafka-streams의 Java 소스는 추적

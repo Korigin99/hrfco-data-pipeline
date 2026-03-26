@@ -139,7 +139,7 @@ services:
       SINGLE_USER_CREDENTIALS_PASSWORD: AdminPassword123456
       JVM_HEAP_INIT: 512m  # 초기 메모리
       JVM_HEAP_MAX: 2g     # 최대 메모리
-      # SSL/TLS 설정 - 공공 API HTTPS 호출을 위해 Java 기본 truststore 사용
+      # NiFi 자체 TLS용 truststore (웹 UI 8443 등 들어오는 연결). 나가는 InvokeHTTP(공공 API)용은 docs/NIFI_FLOW.md 참고.
       TRUSTSTORE_PATH: /opt/java/openjdk/lib/security/cacerts
       TRUSTSTORE_PASSWORD: changeit
     volumes:
