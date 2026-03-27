@@ -3,7 +3,6 @@
 
 package hrfco.kafka.streams.repository;
 
-import hrfco.kafka.streams.util.RetryUtil;
 import org.bson.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,12 +46,15 @@ public class MongoDBRepository {
      * @param jsonData JSON 문자열
      */
     public void insertDocument(String collectionName, String jsonData) {
-        RetryUtil.executeWithRetry(() -> {
+        try {
             MongoCollection<Document> collection = database.getCollection(collectionName);
             Document document = Document.parse(jsonData);
             collection.insertOne(document);
             logger.debug("Inserted document to MongoDB collection: {}", collectionName);
-        }, "MongoDB.insertDocument");
+        } catch (Exception e) {
+            logger.error("Failed to insert document to MongoDB", e);
+            throw new RuntimeException("MongoDB insert failed", e);
+        }
     }
 
     /**
@@ -62,11 +64,14 @@ public class MongoDBRepository {
      * @param document Document 객체
      */
     public void insertDocument(String collectionName, Document document) {
-        RetryUtil.executeWithRetry(() -> {
+        try {
             MongoCollection<Document> collection = database.getCollection(collectionName);
             collection.insertOne(document);
             logger.debug("Inserted document to MongoDB collection: {}", collectionName);
-        }, "MongoDB.insertDocument");
+        } catch (Exception e) {
+            logger.error("Failed to insert document to MongoDB", e);
+            throw new RuntimeException("MongoDB insert failed", e);
+        }
     }
     
     /**
@@ -83,7 +88,7 @@ public class MongoDBRepository {
      * @param stationData 관측소 임계값 데이터 Document
      */
     public void upsertStationThreshold(String observationCode, Document stationData) {
-        RetryUtil.executeWithRetry(() -> {
+        try {
             MongoCollection<Document> collection = database.getCollection("observation_stations");
 
             stationData.put("_id", observationCode);
@@ -96,7 +101,10 @@ public class MongoDBRepository {
             );
 
             logger.debug("Upserted station threshold: {}", observationCode);
-        }, "MongoDB.upsertStationThreshold");
+        } catch (Exception e) {
+            logger.error("Failed to upsert station threshold", e);
+            throw new RuntimeException("MongoDB upsert failed", e);
+        }
     }
     
     /**

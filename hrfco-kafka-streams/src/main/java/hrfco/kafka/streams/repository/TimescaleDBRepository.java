@@ -8,8 +8,6 @@ import com.zaxxer.hikari.HikariDataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import hrfco.kafka.streams.util.RetryUtil;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
@@ -138,29 +136,28 @@ public class TimescaleDBRepository {
     public void insertWaterLevelData(String obsCode, Timestamp obsTime,
                                       Double waterLevel, Double flowRate,
                                       boolean isAnomaly, String floodWarning) {
-        RetryUtil.executeWithRetry(() -> {
-            String sql = """
-                INSERT INTO hrfco.water_level_data
-                (observation_code, observation_time, water_level, flow_rate, is_anomaly, flood_warning_level)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """;
+        String sql = """
+            INSERT INTO hrfco.water_level_data
+            (observation_code, observation_time, water_level, flow_rate, is_anomaly, flood_warning_level)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """;
 
-            try (Connection conn = dataSource.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-                stmt.setString(1, obsCode);
-                stmt.setTimestamp(2, obsTime);
-                stmt.setObject(3, waterLevel);
-                stmt.setObject(4, flowRate);
-                stmt.setBoolean(5, isAnomaly);
-                stmt.setString(6, floodWarning);
+            stmt.setString(1, obsCode);
+            stmt.setTimestamp(2, obsTime);
+            stmt.setObject(3, waterLevel);
+            stmt.setObject(4, flowRate);
+            stmt.setBoolean(5, isAnomaly);
+            stmt.setString(6, floodWarning);
 
-                stmt.executeUpdate();
-                logger.debug("Inserted water level data: {}", obsCode);
-            } catch (SQLException e) {
-                throw new RuntimeException("Database insert failed", e);
-            }
-        }, "TimescaleDB.insertWaterLevelData");
+            stmt.executeUpdate();
+            logger.debug("Inserted water level data: {}", obsCode);
+        } catch (SQLException e) {
+            logger.error("Failed to insert water level data", e);
+            throw new RuntimeException("Database insert failed", e);
+        }
     }
     
     /**
