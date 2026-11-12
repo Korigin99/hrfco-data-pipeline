@@ -1,5 +1,6 @@
 package hrfco.kafka.streams.resilience;
 
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -62,9 +63,12 @@ public class StorageCircuitBreakerRegistry {
         long initialDelayMs = Long.parseLong(
             System.getenv().getOrDefault("RETRY_INITIAL_DELAY_MS", "500"));
 
+        // Retry가 Circuit Breaker 바깥을 감싸므로, 열린 브레이커의 거절(CallNotPermittedException)은
+        // 재시도하지 않는다. 재시도해도 같은 결과라 대기 시간만큼 Streams 처리 스레드가 막힌다.
         RetryConfig retryConfig = RetryConfig.custom()
             .maxAttempts(maxRetries)
             .waitDuration(Duration.ofMillis(initialDelayMs))
+            .ignoreExceptions(CallNotPermittedException.class)
             .build();
 
         RetryRegistry retryRegistry = RetryRegistry.of(retryConfig);
