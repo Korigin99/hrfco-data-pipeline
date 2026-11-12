@@ -155,7 +155,7 @@ public class TimescaleDBRepository {
      * 같은 (observation_code, observation_time) 행이 이미 있을 때의 처리: 덮어쓰기(DO UPDATE)
      * - 정정될 수 있는 값(수위·유량·이상치 여부·경보 단계)만 덮어쓰고, created_at(처음 저장 시각)은 두고 updated_at을 찍는다
      * - 값이 그대로면 쓰지 않는다(WHERE ... IS DISTINCT FROM). 재처리·재수집처럼 같은 값이 다시 올 때
-     *   새 행 버전(MVCC)과 WAL을 만들지 않고, updated_at이 '실제로 정정된 시각'을 뜻하게 된다.
+     *   충돌 행에 잠금만 걸고 새 행 버전(MVCC dead tuple)은 만들지 않으며, updated_at이 '실제로 정정된 시각'을 뜻하게 된다.
      *   NULL끼리도 같은 값으로 보도록 <> 대신 IS DISTINCT FROM을 쓴다.
      */
     private static final String ON_CONFLICT_CLAUSE = """
