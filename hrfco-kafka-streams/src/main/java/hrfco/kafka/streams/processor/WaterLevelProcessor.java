@@ -9,6 +9,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+
 /**
  * 수위 데이터 처리 프로세서
  * Kafka 레코드를 수신하여 검증 -> 이상치 탐지 -> 저장 -> 알림 발송
@@ -41,27 +43,15 @@ public class WaterLevelProcessor {
         try {
             logger.info("=== Received water level data ===");
 
-            // 1. JSON 파싱
-            WaterLevelData data = objectMapper.readValue(value, WaterLevelData.class);
-            logger.info("Parsed - ObsCode: {}, Time: {}, WL: {}, FW: {}",
-                data.getObservationCode(),
-                data.getFormattedObservationTime(),
-                data.getWaterLevelValue(),
-                data.getFlowRateValue());
-
-            // 2. 필수 필드 검증
-            if (!WaterLevelValidator.validateRequiredFields(data)) {
-                logger.error("Required fields validation failed for: {}. Skipping.",
-                    data.getObservationCode());
+            // 1~3. 파싱 → 필수 필드 검증 → 범위 검증·이상치 탐지
+            Analyzed analyzed = analyze(value);
+            if (analyzed == null) {
+                logger.error("Required fields validation failed. Skipping. Value: {}", value);
                 return;
             }
-
-            // 3. 데이터 범위 검증 + 이상치 탐지
-            boolean isRangeValid = WaterLevelValidator.validateDataRange(data);
-            AnomalyDetector.AnomalyResult anomalyResult = anomalyDetector.detect(data, isRangeValid);
-
-            boolean isAnomaly = anomalyResult.isAnomaly();
-            String floodWarningLevel = anomalyResult.getFloodWarningLevel();
+            WaterLevelData data = analyzed.data();
+            boolean isAnomaly = analyzed.isAnomaly();
+            String floodWarningLevel = analyzed.floodWarningLevel();
 
             // 4. 저장
             StorageResult storageResult = storageService.saveWaterLevelData(
@@ -71,7 +61,8 @@ public class WaterLevelProcessor {
             if (storageResult.isPartialFailure()) {
                 dlqProducer.sendPartialFailure(key, value, storageResult.getFailures());
             } else if (storageResult.isAllFailed()) {
-                dlqProducer.send(key, value, "All storages failed: " + storageResult, null);
+                dlqProducer.send(key, value,
+                    DeadLetterQueueProducer.REASON_ALL_STORAGES_FAILED + ": " + storageResult, null);
             }
 
             // 5. 알림 발송
@@ -92,5 +83,45 @@ public class WaterLevelProcessor {
             logger.error("Key: {}, Value: {}", key, value);
             dlqProducer.send(key, value, "Processing failed: " + e.getClass().getSimpleName(), e);
         }
+    }
+
+    /**
+     * DLQ 재처리: 저장만 다시 한다.
+     * 경보는 처음 처리할 때 이미 보냈으므로 다시 보내지 않고, 실패해도 DLQ로 다시 보내지 않는다(재처리기가 판단).
+     *
+     * @throws IllegalArgumentException 필수 필드가 없어 다시 해도 저장할 수 없는 레코드
+     */
+    public StorageResult restore(String value) throws IOException {
+        Analyzed analyzed = analyze(value);
+        if (analyzed == null) {
+            throw new IllegalArgumentException("Required fields validation failed: " + value);
+        }
+        return storageService.saveWaterLevelData(
+            analyzed.data(), value, analyzed.isAnomaly(), analyzed.floodWarningLevel());
+    }
+
+    private record Analyzed(WaterLevelData data, boolean isAnomaly, String floodWarningLevel) {
+    }
+
+    /**
+     * 파싱 → 필수 필드 검증 → 범위 검증·이상치 탐지
+     *
+     * @return 필수 필드 검증에 실패하면 null
+     */
+    private Analyzed analyze(String value) throws IOException {
+        WaterLevelData data = objectMapper.readValue(value, WaterLevelData.class);
+        logger.info("Parsed - ObsCode: {}, Time: {}, WL: {}, FW: {}",
+            data.getObservationCode(),
+            data.getFormattedObservationTime(),
+            data.getWaterLevelValue(),
+            data.getFlowRateValue());
+
+        if (!WaterLevelValidator.validateRequiredFields(data)) {
+            return null;
+        }
+
+        boolean isRangeValid = WaterLevelValidator.validateDataRange(data);
+        AnomalyDetector.AnomalyResult anomalyResult = anomalyDetector.detect(data, isRangeValid);
+        return new Analyzed(data, anomalyResult.isAnomaly(), anomalyResult.getFloodWarningLevel());
     }
 }

@@ -19,8 +19,12 @@ import java.util.Properties;
 public class DeadLetterQueueProducer {
     private static final Logger logger = LoggerFactory.getLogger(DeadLetterQueueProducer.class);
 
-    private static final String DLQ_TOPIC = System.getenv()
+    public static final String DLQ_TOPIC = System.getenv()
         .getOrDefault("DLQ_TOPIC", "hrfco-waterlevel-dlq");
+
+    /** 저장 실패 사유 접두어. DLQ 재처리기는 이 두 사유만 다시 저장한다 */
+    public static final String REASON_PARTIAL_STORAGE_FAILURE = "Partial storage failure";
+    public static final String REASON_ALL_STORAGES_FAILED = "All storages failed";
 
     private final KafkaProducer<String, String> producer;
     private final ObjectMapper objectMapper;
@@ -81,7 +85,7 @@ public class DeadLetterQueueProducer {
      * @param failedStorages 실패한 저장소 목록
      */
     public void sendPartialFailure(String originalKey, String originalValue, java.util.List<String> failedStorages) {
-        String reason = "Partial storage failure: " + String.join(", ", failedStorages);
+        String reason = REASON_PARTIAL_STORAGE_FAILURE + ": " + String.join(", ", failedStorages);
         send(originalKey, originalValue, reason, null);
     }
 
