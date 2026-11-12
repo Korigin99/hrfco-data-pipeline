@@ -84,7 +84,7 @@ public class HRFCOStorageService {
             () -> saveToTimescaleDB(waterLevelData, isAnomaly, floodWarningLevel), executorService);
 
         CompletableFuture<Void> mongoDBFuture = CompletableFuture.runAsync(
-            () -> saveToMongoDB(originalJson, isAnomaly, floodWarningLevel), executorService);
+            () -> saveToMongoDB(waterLevelData, originalJson, isAnomaly, floodWarningLevel), executorService);
 
         // 각 저장소별 결과를 개별 추적
         try {
@@ -140,16 +140,17 @@ public class HRFCOStorageService {
     }
     
     /**
-     * MinIO 저장 경로 생성 - waterlevel/{normal|anomalies}/yyyy/MM/dd/obs_{code}_{timestamp}.json
+     * MinIO 저장 - waterlevel/{normal|anomalies}/{관측일 yyyy/MM/dd}/obs_{code}_{yyyyMMddHHmm}.json
+     * 같은 관측값은 같은 경로에 덮어쓴다. 정정으로 이상치 판정이 바뀌면 반대쪽 폴더의 객체를 지운다.
      */
     private void saveToMinIO(WaterLevelData waterLevelData, boolean isAnomaly) {
         circuitBreakerRegistry.executeMinIO(() -> {
             try {
-                String type = isAnomaly ? "anomalies" : "normal";
-                String objectPath = buildMinIOPath(type, waterLevelData);
+                String objectPath = ObservationKeys.minioPath(waterLevelData, isAnomaly);
                 String json = objectMapper.writeValueAsString(waterLevelData);
 
                 minIO.saveJson(objectPath, json);
+                minIO.deleteObject(ObservationKeys.counterpartMinioPath(waterLevelData, isAnomaly));
                 logger.debug("Saved to MinIO: {}", objectPath);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to save to MinIO", e);
@@ -165,7 +166,7 @@ public class HRFCOStorageService {
             try {
                 Timestamp timestamp = parseTimestamp(waterLevelData.getFormattedObservationTime());
 
-                timescaleDB.insertWaterLevelData(
+                timescaleDB.upsertWaterLevelData(
                     waterLevelData.getObservationCode(),
                     timestamp,
                     waterLevelData.getWaterLevelValue(),
@@ -183,34 +184,22 @@ public class HRFCOStorageService {
     
     /**
      * MongoDB 저장 water_level_data 컬렉션에 원본 JSON
+     * _id = 관측소코드_관측시각으로 upsert한다 (created_at·updated_at은 저장소에서 붙인다)
      */
-    private void saveToMongoDB(String originalJson, boolean isAnomaly, String floodWarning) {
+    private void saveToMongoDB(WaterLevelData waterLevelData, String originalJson,
+                               boolean isAnomaly, String floodWarning) {
         circuitBreakerRegistry.executeMongoDB(() -> {
             try {
                 Document doc = Document.parse(originalJson);
                 doc.append("is_anomaly", isAnomaly);
                 doc.append("flood_warning_level", floodWarning);
-                doc.append("created_at", new java.util.Date());
 
-                mongoDB.insertDocument("water_level_data", doc);
+                mongoDB.upsertDocument("water_level_data", ObservationKeys.documentId(waterLevelData), doc);
                 logger.debug("Saved to MongoDB water_level_data collection");
             } catch (Exception e) {
                 throw new RuntimeException("Failed to save to MongoDB", e);
             }
         });
-    }
-    
-    /**
-     * MinIO 경로 생성
-     */
-    private String buildMinIOPath(String type, WaterLevelData waterLevelData) {
-        LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd");
-        String datePath = now.format(formatter);
-        
-        return String.format("waterlevel/%s/%s/obs_%s_%s.json", 
-                type, datePath, waterLevelData.getObservationCode(), 
-                System.currentTimeMillis());
     }
     
     /**

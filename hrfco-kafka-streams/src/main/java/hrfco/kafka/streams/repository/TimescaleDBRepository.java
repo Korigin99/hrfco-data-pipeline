@@ -88,25 +88,46 @@ public class TimescaleDBRepository {
                     is_anomaly BOOLEAN DEFAULT FALSE,
                     flood_warning_level VARCHAR(20),
                     created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ,
                     PRIMARY KEY (id, observation_time)
                 )
                 """;
-            
+
             try (PreparedStatement stmt = conn.prepareStatement(createTableSQL)) {
                 stmt.execute();
             }
-            
+
+            // 이전 버전에서 만든 테이블에는 updated_at이 없다
+            try (PreparedStatement stmt = conn.prepareStatement(
+                    "ALTER TABLE hrfco.water_level_data ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ")) {
+                stmt.execute();
+            }
+
             // Hypertable 생성
             String hypertableSQL = """
                 SELECT create_hypertable('hrfco.water_level_data', 'observation_time', if_not_exists => TRUE)
                 """;
-            
+
             try (PreparedStatement stmt = conn.prepareStatement(hypertableSQL)) {
                 stmt.execute();
             } catch (SQLException e) {
                 logger.debug("HRFCO hypertable: {}", e.getMessage());
             }
-            
+
+            // 멱등 저장용 고유 인덱스 (관측소 코드 + 관측 시각)
+            // - 하이퍼테이블의 고유 인덱스는 파티션 열(observation_time)을 포함해야 한다
+            // - upsert의 ON CONFLICT가 이 인덱스에 의존하므로 만들지 못하면 시작을 멈춘다
+            //   (이미 중복 행이 있으면 생성이 실패한다. 정리 SQL은 README 참고)
+            try (PreparedStatement stmt = conn.prepareStatement(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_hrfco_obs_code_time "
+                    + "ON hrfco.water_level_data (observation_code, observation_time)")) {
+                stmt.execute();
+            } catch (SQLException e) {
+                throw new RuntimeException(
+                    "Unique index (observation_code, observation_time) creation failed. "
+                    + "Remove duplicate rows first (see README).", e);
+            }
+
             // 인덱스 생성
             String[] indexes = {
                 "CREATE INDEX IF NOT EXISTS idx_hrfco_obs_code ON hrfco.water_level_data(observation_code)",
@@ -131,16 +152,35 @@ public class TimescaleDBRepository {
     }
     
     /**
-     * 한강 수위 데이터 삽입
+     * 같은 (observation_code, observation_time) 행이 이미 있을 때의 처리: 덮어쓰기(DO UPDATE)
+     * - 정정될 수 있는 값(수위·유량·이상치 여부·경보 단계)만 덮어쓰고, created_at(처음 저장 시각)은 두고 updated_at을 찍는다
+     * - 값이 그대로면 쓰지 않는다(WHERE ... IS DISTINCT FROM). 재처리·재수집처럼 같은 값이 다시 올 때
+     *   새 행 버전(MVCC)과 WAL을 만들지 않고, updated_at이 '실제로 정정된 시각'을 뜻하게 된다.
+     *   NULL끼리도 같은 값으로 보도록 <> 대신 IS DISTINCT FROM을 쓴다.
      */
-    public void insertWaterLevelData(String obsCode, Timestamp obsTime,
+    private static final String ON_CONFLICT_CLAUSE = """
+        ON CONFLICT (observation_code, observation_time) DO UPDATE SET
+            water_level = EXCLUDED.water_level,
+            flow_rate = EXCLUDED.flow_rate,
+            is_anomaly = EXCLUDED.is_anomaly,
+            flood_warning_level = EXCLUDED.flood_warning_level,
+            updated_at = NOW()
+        WHERE (w.water_level, w.flow_rate, w.is_anomaly, w.flood_warning_level)
+            IS DISTINCT FROM
+              (EXCLUDED.water_level, EXCLUDED.flow_rate, EXCLUDED.is_anomaly, EXCLUDED.flood_warning_level)
+        """;
+
+    /**
+     * 한강 수위 데이터 멱등 저장 (관측소 코드 + 관측 시각 기준 upsert)
+     */
+    public void upsertWaterLevelData(String obsCode, Timestamp obsTime,
                                       Double waterLevel, Double flowRate,
                                       boolean isAnomaly, String floodWarning) {
         String sql = """
-            INSERT INTO hrfco.water_level_data
+            INSERT INTO hrfco.water_level_data AS w
             (observation_code, observation_time, water_level, flow_rate, is_anomaly, flood_warning_level)
             VALUES (?, ?, ?, ?, ?, ?)
-            """;
+            """ + ON_CONFLICT_CLAUSE;
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -153,10 +193,10 @@ public class TimescaleDBRepository {
             stmt.setString(6, floodWarning);
 
             stmt.executeUpdate();
-            logger.debug("Inserted water level data: {}", obsCode);
+            logger.debug("Upserted water level data: {}", obsCode);
         } catch (SQLException e) {
-            logger.error("Failed to insert water level data", e);
-            throw new RuntimeException("Database insert failed", e);
+            logger.error("Failed to upsert water level data", e);
+            throw new RuntimeException("Database upsert failed", e);
         }
     }
     

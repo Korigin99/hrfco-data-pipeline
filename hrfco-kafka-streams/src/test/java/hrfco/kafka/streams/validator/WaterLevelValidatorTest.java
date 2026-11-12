@@ -40,6 +40,13 @@ class WaterLevelValidatorTest {
     }
 
     @Test
+    void validateRequiredFields_timeNotTwelveDigits_returnsFalse() {
+        // 관측 시각은 멱등 키의 일부라 yyyyMMddHHmm 12자리 숫자여야 한다
+        assertFalse(WaterLevelValidator.validateRequiredFields(createData("1001602", "20251209", "1.23", null)));
+        assertFalse(WaterLevelValidator.validateRequiredFields(createData("1001602", "2025120915ab", "1.23", null)));
+    }
+
+    @Test
     void validateRequiredFields_bothMeasurementsMissing_returnsFalse() {
         WaterLevelData data = createData("1001602", "202512091530", null, null);
         assertFalse(WaterLevelValidator.validateRequiredFields(data));

@@ -66,6 +66,12 @@ public class WaterLevelValidator {
             logger.error("Observation time is missing");
             return false;
         }
+
+        // 관측 시각은 멱등 키(관측소 코드 + 관측 시각)의 일부라 형식이 정확해야 한다
+        if (!data.getObservationTime().matches("\\d{12}")) {
+            logger.error("Observation time is not yyyyMMddHHmm: {}", data.getObservationTime());
+            return false;
+        }
         
         // 최소한 수위나 유량 중 하나는 있어야 함
         if ((data.getWaterLevel() == null || data.getWaterLevel().trim().isEmpty()) &&

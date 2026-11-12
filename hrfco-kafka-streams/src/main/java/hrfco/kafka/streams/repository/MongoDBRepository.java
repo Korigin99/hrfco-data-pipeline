@@ -75,6 +75,34 @@ public class MongoDBRepository {
     }
     
     /**
+     * _id 기준 upsert. 같은 _id로 다시 저장하면 필드를 덮어쓴다.
+     * created_at은 처음 저장할 때만 쓰고($setOnInsert), updated_at은 매번 갱신한다.
+     *
+     * @param collectionName 컬렉션 이름
+     * @param id 멱등 키 (예: 관측소코드_관측시각)
+     * @param fields 저장할 필드 (_id 제외)
+     */
+    public void upsertDocument(String collectionName, String id, Document fields) {
+        try {
+            MongoCollection<Document> collection = database.getCollection(collectionName);
+            java.util.Date now = new java.util.Date();
+
+            Document set = new Document(fields).append("updated_at", now);
+            set.remove("_id");
+
+            collection.updateOne(
+                new Document("_id", id),
+                new Document("$set", set).append("$setOnInsert", new Document("created_at", now)),
+                new com.mongodb.client.model.UpdateOptions().upsert(true)
+            );
+            logger.debug("Upserted document to MongoDB collection: {} (_id={})", collectionName, id);
+        } catch (Exception e) {
+            logger.error("Failed to upsert document to MongoDB", e);
+            throw new RuntimeException("MongoDB upsert failed", e);
+        }
+    }
+
+    /**
      * 컬렉션 가져오기
      */
     public MongoCollection<Document> getCollection(String collectionName) {

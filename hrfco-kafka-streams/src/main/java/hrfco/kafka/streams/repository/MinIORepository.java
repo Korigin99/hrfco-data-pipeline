@@ -7,6 +7,7 @@ import io.minio.BucketExistsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -92,6 +93,24 @@ public class MinIORepository {
         }
     }
     
+    /**
+     * 객체 삭제. 없는 객체를 지워도 오류가 나지 않는다 (S3 의미론)
+     *
+     * @param objectPath 삭제할 경로
+     */
+    public void deleteObject(String objectPath) {
+        try {
+            minioClient.removeObject(RemoveObjectArgs.builder()
+                    .bucket(bucketName)
+                    .object(objectPath)
+                    .build());
+            logger.debug("Removed object from MinIO: {}", objectPath);
+        } catch (Exception e) {
+            logger.error("Failed to remove object from MinIO: {}", objectPath, e);
+            throw new RuntimeException("MinIO remove failed", e);
+        }
+    }
+
     /**
      * 버킷 이름 가져오기
      */
