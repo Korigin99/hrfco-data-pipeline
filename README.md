@@ -62,6 +62,10 @@ HRFCO Open API
 
 `hrfco-kafka-streams`는 저장 작업을 병렬 실행하여 처리량과 지연시간을 균형 있게 관리합니다.
 
+- **멱등 저장**: 관측소 코드 + 관측 시각을 키로 세 저장소 모두 덮어쓰기 — 재처리·재수집에도 같은 관측값은 한 건
+- **DLQ 재처리**: 저장 실패로 `hrfco-waterlevel-dlq`에 간 레코드를 저장소가 회복되면 세 저장소에 다시 저장
+- 자세한 내용과 기존 중복 데이터 정리 방법: [`hrfco-kafka-streams/README.md`](hrfco-kafka-streams/README.md)
+
 ### 4) 모니터링 서버 (`hrfco-monitoring-server`)
 
 - Kafka `hrfco-alerts` 수신 후 SSE로 브라우저 푸시
