@@ -30,7 +30,7 @@ HRFCO Open API
       -> SSE 실시간 알림 스트림
       -> 관측소 정보 조회
       -> NiFi API 연동 메트릭/상태 모니터링
-      -> Web Dashboard (/test.html)
+      -> Web Dashboard (/)
 ```
 
 ## 주요 기능
@@ -67,7 +67,7 @@ HRFCO Open API
 - Kafka `hrfco-alerts` 수신 후 SSE로 브라우저 푸시
 - 관측소 목록/상세 조회 API 제공
 - NiFi 상태(Online/Offline) 및 상세 메트릭 API 제공
-- 대시보드(`test.html`)에서 실시간 알림/시스템 상태 가시화
+- 대시보드(`dashboard.html`, `/` 또는 `/monitoring`)에서 실시간 알림/시스템 상태 가시화
 
 ## 기술 스택
 
@@ -93,7 +93,7 @@ hrfco-data-pipeline/
 |  `- README.md
 `- hrfco-monitoring-server/
    |- src/main/java/com/korigin/hrfco_monitoring_server/
-   |- src/main/resources/static/test.html
+   |- src/main/resources/static/dashboard.html
    |- Dockerfile
    `- README.md
 ```
@@ -120,7 +120,7 @@ docker compose ps
 
 | 구성요소 | 주소 | 비고 |
 |---|---|---|
-| Monitoring Dashboard | `http://localhost:8081/test.html` | 실시간 대시보드 |
+| Monitoring Dashboard | `http://localhost:8081/` | 실시간 대시보드 (`/monitoring`도 같음) |
 | NiFi UI | `https://localhost:8443/nifi/` | `admin / AdminPassword123456` |
 | MinIO Console | `http://localhost:9001` | `admin / adminpassword123` |
 | TimescaleDB | `localhost:5433` | `postgres / postgrespassword123` |

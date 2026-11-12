@@ -211,7 +211,7 @@ services:
   # 7. HRFCO Monitoring Server - SSE 알림 및 모니터링 서버
   # ============================================
   # 수위 경보 알림을 실시간으로 클라이언트에게 전송
-  # 웹 UI: http://localhost:8081/test.html
+  # 웹 UI: http://localhost:8081/ (dashboard.html)
   hrfco-monitoring-server:
     build:
       context: ./hrfco-monitoring-server
