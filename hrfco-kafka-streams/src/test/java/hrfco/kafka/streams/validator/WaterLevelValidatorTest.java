@@ -47,6 +47,14 @@ class WaterLevelValidatorTest {
     }
 
     @Test
+    void validateRequiredFields_nonexistentTime_returnsFalse() {
+        // 형식은 맞지만 없는 시각 — 그대로 두면 TimescaleDB 저장 때 현재 시각으로 대체되어 키가 흔들린다
+        assertFalse(WaterLevelValidator.validateRequiredFields(createData("1001602", "202613011530", "1.23", null)));
+        assertFalse(WaterLevelValidator.validateRequiredFields(createData("1001602", "202602301530", "1.23", null)));
+        assertFalse(WaterLevelValidator.validateRequiredFields(createData("1001602", "202612012460", "1.23", null)));
+    }
+
+    @Test
     void validateRequiredFields_bothMeasurementsMissing_returnsFalse() {
         WaterLevelData data = createData("1001602", "202512091530", null, null);
         assertFalse(WaterLevelValidator.validateRequiredFields(data));

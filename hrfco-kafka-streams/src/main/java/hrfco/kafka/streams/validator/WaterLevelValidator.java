@@ -7,6 +7,11 @@ import hrfco.kafka.streams.model.WaterLevelData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
+
 public class WaterLevelValidator {
     private static final Logger logger = LoggerFactory.getLogger(WaterLevelValidator.class);
 
@@ -67,9 +72,10 @@ public class WaterLevelValidator {
             return false;
         }
 
-        // 관측 시각은 멱등 키(관측소 코드 + 관측 시각)의 일부라 형식이 정확해야 한다
-        if (!data.getObservationTime().matches("\\d{12}")) {
-            logger.error("Observation time is not yyyyMMddHHmm: {}", data.getObservationTime());
+        // 관측 시각은 멱등 키(관측소 코드 + 관측 시각)의 일부라 실제로 있는 시각이어야 한다
+        // (없는 시각은 TimescaleDB 저장 때 현재 시각으로 대체되어 같은 관측값의 키가 달라진다)
+        if (!isValidObservationTime(data.getObservationTime())) {
+            logger.error("Observation time is not a valid yyyyMMddHHmm: {}", data.getObservationTime());
             return false;
         }
         
@@ -84,6 +90,22 @@ public class WaterLevelValidator {
         return true;
     }
     
+    private static final DateTimeFormatter OBSERVATION_TIME_FORMAT =
+        DateTimeFormatter.ofPattern("uuuuMMddHHmm").withResolverStyle(ResolverStyle.STRICT);
+
+    /** yyyyMMddHHmm 12자리이고 실제로 있는 날짜·시각인가 (13월, 2월 30일, 24시 등은 거부) */
+    private static boolean isValidObservationTime(String ymdhm) {
+        if (!ymdhm.matches("\\d{12}")) {
+            return false;
+        }
+        try {
+            LocalDateTime.parse(ymdhm, OBSERVATION_TIME_FORMAT);
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
+        }
+    }
+
     /**
      * 데이터 범위 검증
      * 수위, 유량의 기본 범위 내에 있는지 검증
