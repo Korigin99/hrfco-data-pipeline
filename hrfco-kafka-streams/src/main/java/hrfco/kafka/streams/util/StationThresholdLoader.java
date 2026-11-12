@@ -21,12 +21,9 @@ import java.util.Date;
 public class StationThresholdLoader {
     private static final Logger logger = LoggerFactory.getLogger(StationThresholdLoader.class);
     
-    // 서비스 키는 환경변수에서 가져오거나 기본값 사용
-    private static final String SERVICE_KEY = System.getenv().getOrDefault(
-        "HRFCO_SERVICE_KEY", 
-        "7F1EF036-EB93-4721-96CB-EEDC63624041"
-    );
-    private static final String API_URL = "https://api.hrfco.go.kr/" + SERVICE_KEY + "/waterlevel/info.json";
+    // 서비스 키는 환경변수로만 주입한다 (.env -> docker-compose -> 컨테이너). 코드에 기본값을 두지 않는다.
+    private static final String SERVICE_KEY = System.getenv("HRFCO_SERVICE_KEY");
+    private static final String API_PATH = "/waterlevel/info.json";
     
     private final MongoDBRepository mongoDB;
     private final ObjectMapper objectMapper;
@@ -41,10 +38,16 @@ public class StationThresholdLoader {
      */
     public void loadStationThresholds() {
         try {
-            logger.info("Loading station thresholds from API: {}", API_URL);
+            if (SERVICE_KEY == null || SERVICE_KEY.isBlank()) {
+                logger.error("HRFCO_SERVICE_KEY is not set. Skipping station threshold loading.");
+                return;
+            }
+            String apiUrl = "https://api.hrfco.go.kr/" + SERVICE_KEY + API_PATH;
+            // 로그에는 키를 남기지 않는다
+            logger.info("Loading station thresholds from API: https://api.hrfco.go.kr/****{}", API_PATH);
             
             // API 호출
-            String jsonResponse = callAPI(API_URL);
+            String jsonResponse = callAPI(apiUrl);
             if (jsonResponse == null || jsonResponse.isEmpty()) {
                 logger.error("Failed to get response from API");
                 return;

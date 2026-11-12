@@ -36,3 +36,5 @@ Thumbs.db
 *.jar
 !gradle-wrapper.jar
 
+# Claude Code 로컬 설정
+.claude/

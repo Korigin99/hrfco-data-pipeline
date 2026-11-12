@@ -142,6 +142,8 @@ services:
       # NiFi 자체 TLS용 truststore (웹 UI 8443 등 들어오는 연결). 나가는 InvokeHTTP(공공 API)용은 docs/NIFI_FLOW.md 참고.
       TRUSTSTORE_PATH: /opt/java/openjdk/lib/security/cacerts
       TRUSTSTORE_PASSWORD: changeit
+      # InvokeHTTP URL의 ${HRFCO_SERVICE_KEY}가 이 환경변수를 읽는다 (값은 .env에서 주입)
+      HRFCO_SERVICE_KEY: ${HRFCO_SERVICE_KEY:?HRFCO_SERVICE_KEY is not set. Copy .env.example to .env and set your key}
     volumes:
       - nifi-conf:/opt/nifi/nifi-current/conf
       - nifi-state:/opt/nifi/nifi-current/state
@@ -200,7 +202,7 @@ services:
       MONGODB_DB: pipeline_db
       MONGODB_USER: admin
       MONGODB_PASSWORD: adminpassword123
-      HRFCO_SERVICE_KEY: 7F1EF036-EB93-4721-96CB-EEDC63624041
+      HRFCO_SERVICE_KEY: ${HRFCO_SERVICE_KEY:?HRFCO_SERVICE_KEY is not set. Copy .env.example to .env and set your key}
       NUM_STREAM_THREADS: 4  # 병렬 처리 스레드 수 (환경 변수 미설정 시 CPU 코어 수 자동 사용)
 
 

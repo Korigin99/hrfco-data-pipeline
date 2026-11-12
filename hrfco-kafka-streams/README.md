@@ -64,7 +64,7 @@ java -jar app/build/libs/hrfco-kafka-streams-1.0.0.jar
 | `MONGODB_DB` | MongoDB 데이터베이스 | `pipeline_db` |
 | `MONGODB_USER` | MongoDB 사용자 | `admin` |
 | `MONGODB_PASSWORD` | MongoDB 비밀번호 | `adminpassword123` |
-| `HRFCO_SERVICE_KEY` | HRFCO API 서비스 키 | `7F1EF036-EB93-4721-96CB-EEDC63624041` |
+| `HRFCO_SERVICE_KEY` | HRFCO API 서비스 키 (필수, 루트 `.env`에 설정) | 없음 — `.env.example` 참고 |
 
 ## 데이터 처리 흐름
 
